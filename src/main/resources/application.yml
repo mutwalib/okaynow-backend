@@ -1,0 +1,52 @@
+spring:
+  application:
+    name: okaynow-backend
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:okaynow}
+    username: ${DB_USER:okaynow}
+    password: ${DB_PASSWORD:okaynow}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  servlet:
+    multipart:
+      max-file-size: 2MB
+      max-request-size: 2MB
+
+server:
+  port: 8080
+
+app:
+  jwt:
+    # Override in production via APP_JWT_SECRET. Must be at least 32 bytes for HS256.
+    secret: ${APP_JWT_SECRET:change-me-in-production-okaynow-dev-secret-key-0123456789}
+    access-token-validity-seconds: 900
+    refresh-token-validity-seconds: 1209600
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001}
+  bootstrap-admin:
+    # Local defaults; override via env in production and remove after first boot.
+    email: ${ADMIN_BOOTSTRAP_EMAIL:admin@okaynow.com}
+    password: ${ADMIN_BOOTSTRAP_PASSWORD:admin123}
+  upload:
+    dir: ${APP_UPLOAD_DIR:./uploads}
+    max-bytes: ${APP_UPLOAD_MAX_BYTES:2097152}
+  service-region:
+    # Comma-expand later (e.g. MA,RI). ZIP prefixes keep postal checks strict per state.
+    # Quote ZIP3 values — unquoted 010 is parsed as a number and loses the leading zero.
+    allowed-states: ${APP_ALLOWED_STATES:MA}
+    zip-prefixes:
+      MA: ["010","011","012","013","014","015","016","017","018","019","020","021","022","023","024","025","026","027"]
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    com.okaynow: INFO

@@ -208,8 +208,16 @@ public class SettlementService {
         }
         BigDecimal hours = BigDecimal.valueOf(minutes)
                 .divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
+        BigDecimal surge = shift.getSurgeBonusPay() != null
+                ? shift.getSurgeBonusPay()
+                : BigDecimal.ZERO;
+        BigDecimal effectivePay = shift.getPayRate().add(surge);
         BigDecimal clientAmount = shift.getBillRate().multiply(hours).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal caregiverAmount = shift.getPayRate().multiply(hours).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal caregiverAmount = effectivePay.multiply(hours).setScale(2, RoundingMode.HALF_UP);
+        if (claim.getTravelPayAmount() != null) {
+            caregiverAmount = caregiverAmount.add(claim.getTravelPayAmount())
+                    .setScale(2, RoundingMode.HALF_UP);
+        }
         BigDecimal agencyAmount = clientAmount.subtract(caregiverAmount);
 
         PaymentStatus initialClient = shift.isPlatformPaid() ? PaymentStatus.PAID : PaymentStatus.PENDING;
@@ -225,7 +233,7 @@ public class SettlementService {
                 .durationMinutes(minutes)
                 .hours(hours)
                 .billRate(shift.getBillRate())
-                .payRate(shift.getPayRate())
+                .payRate(effectivePay)
                 .clientAmount(clientAmount)
                 .caregiverAmount(caregiverAmount)
                 .agencyAmount(agencyAmount)

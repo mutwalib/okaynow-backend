@@ -7,8 +7,10 @@ import com.okaynow.admin.service.AdminClientService;
 import com.okaynow.admin.service.AdminUserService;
 import com.okaynow.audit.dto.AuditLogResponse;
 import com.okaynow.audit.service.AuditLogService;
+import com.okaynow.booking.domain.ShiftClaim;
 import com.okaynow.booking.domain.ShiftClaimStatus;
 import com.okaynow.booking.dto.ShiftClaimResponse;
+import com.okaynow.booking.repository.ShiftClaimRepository;
 import com.okaynow.booking.service.BookingService;
 import com.okaynow.common.dto.PagedResponse;
 import com.okaynow.common.exception.BadRequestException;
@@ -25,10 +27,14 @@ import com.okaynow.shifts.domain.DayPeriod;
 import com.okaynow.shifts.domain.ShiftStatus;
 import com.okaynow.shifts.dto.ShiftResponse;
 import com.okaynow.shifts.service.ShiftService;
+import com.okaynow.users.domain.ClientProfile;
+import com.okaynow.users.domain.FacilityProfile;
 import com.okaynow.users.domain.Qualification;
 import com.okaynow.users.domain.Role;
 import com.okaynow.users.domain.User;
 import com.okaynow.users.domain.UserStatus;
+import com.okaynow.users.repository.ClientProfileRepository;
+import com.okaynow.users.repository.FacilityProfileRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -38,10 +44,16 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -55,6 +67,9 @@ public class AdminReportService {
     private final AdminClientService adminClientService;
     private final AdminUserService adminUserService;
     private final AuditLogService auditLogService;
+    private final ClientProfileRepository clientProfileRepository;
+    private final FacilityProfileRepository facilityProfileRepository;
+    private final ShiftClaimRepository shiftClaimRepository;
 
     @Transactional
     public GeneratedReport generate(
@@ -94,13 +109,16 @@ public class AdminReportService {
         filters.put("Agency margin", money(summary.agencyMarginAccrued()));
 
         List<String> headers = List.of(
-                "Shift date", "Client", "Caregiver", "Hours", "Client $", "Caregiver $", "Agency $",
-                "Client status", "Caregiver status", "Pay period", "Shift ID");
+                "Shift date", "Client", "Caregiver", "Hours", "Client $", "Caregiver $",
+                "Agency $", "Client status", "Caregiver status", "Pay period");
         List<List<String>> rows = new ArrayList<>();
         for (SettlementResponse s : page.content()) {
+            String clientName = s.facilityName() != null && !s.facilityName().isBlank()
+                    ? s.facilityName()
+                    : name(s.clientFirstName(), s.clientLastName());
             rows.add(List.of(
                     str(s.shiftDate()),
-                    name(s.clientFirstName(), s.clientLastName()),
+                    clientName,
                     name(s.caregiverFirstName(), s.caregiverLastName()),
                     str(s.hours()),
                     money(s.clientAmount()),
@@ -108,8 +126,7 @@ public class AdminReportService {
                     money(s.agencyAmount()),
                     str(s.clientPaymentStatus()),
                     str(s.caregiverPaymentStatus()),
-                    s.payPeriodStart() + " → " + s.payPeriodEnd(),
-                    str(s.shiftId())));
+                    s.payPeriodStart() + " → " + s.payPeriodEnd()));
         }
         return write(ReportType.FINANCE, format, ReportMeta.of(
                 "Finance & settlements report", actor.getEmail(), filters), headers, rows);
@@ -132,35 +149,41 @@ public class AdminReportService {
                 minPay, maxPay, dayPeriod,
                 PageRequest.of(0, EXPORT_SIZE, Sort.by("date", "startTime")), actor);
 
+        ClientNameIndex names = loadClientNames(page.content());
+        Map<UUID, CaregiverCells> caregiversByShift = loadActiveCaregiversByShift(
+                page.content().stream().map(ShiftResponse::id).toList());
+
         Map<String, String> filters = new LinkedHashMap<>();
         filters.put("Status", label(status));
         filters.put("Qualification", label(qualification));
         filters.put("Date from", label(dateFrom));
         filters.put("Date to", label(dateTo));
-        filters.put("Family client", label(clientId));
-        filters.put("Facility client", label(facilityId));
+        filters.put("Family client", clientId != null ? names.client(clientId) : "All");
+        filters.put("Facility client", facilityId != null ? names.facility(facilityId) : "All");
         filters.put("Min pay", label(minPay));
         filters.put("Max pay", label(maxPay));
         filters.put("Day period", label(dayPeriod));
 
         List<String> headers = List.of(
-                "Date", "Start", "End", "Status", "Qualification", "City", "ZIP",
-                "Pay rate", "Bill rate", "Platform paid", "Client profile", "Shift ID");
+                "Date", "Start", "End", "Status", "Qualification", "Client",
+                "Caregiver", "City", "ZIP",
+                "Pay rate", "Bill rate", "Platform paid");
         List<List<String>> rows = new ArrayList<>();
         for (ShiftResponse s : page.content()) {
+            CaregiverCells cg = caregiversByShift.getOrDefault(s.id(), CaregiverCells.EMPTY);
             rows.add(List.of(
                     str(s.date()),
                     str(s.startTime()),
                     str(s.endTime()),
                     str(s.status()),
                     str(s.requiredQualification()),
+                    names.forShift(s),
+                    cg.names(),
                     str(s.city()),
                     str(s.zip()),
                     money(s.payRate()),
                     money(s.billRate()),
-                    s.platformPaid() ? "PAID" : "UNPAID",
-                    str(s.clientProfileId()),
-                    str(s.id())));
+                    s.platformPaid() ? "PAID" : "UNPAID"));
         }
         return write(ReportType.SHIFTS, format, ReportMeta.of(
                 "Shifts report", actor.getEmail(), filters), headers, rows);
@@ -172,12 +195,18 @@ public class AdminReportService {
         PagedResponse<ShiftClaimResponse> page = bookingService.allClaims(
                 status, PageRequest.of(0, EXPORT_SIZE, Sort.by(Sort.Direction.DESC, "claimedAt")));
 
+        List<ShiftResponse> shifts = page.content().stream()
+                .map(ShiftClaimResponse::shift)
+                .filter(Objects::nonNull)
+                .toList();
+        ClientNameIndex names = loadClientNames(shifts);
+
         Map<String, String> filters = new LinkedHashMap<>();
         filters.put("Claim status", label(status));
 
         List<String> headers = List.of(
-                "Claimed at", "Claim status", "Source", "Caregiver", "Email",
-                "Shift date", "Shift status", "Pay rate", "Bill rate", "Shift ID", "Claim ID");
+                "Claimed at", "Claim status", "Source", "Client", "Caregiver",
+                "Shift date", "Shift status", "Pay rate", "Bill rate");
         List<List<String>> rows = new ArrayList<>();
         for (ShiftClaimResponse c : page.content()) {
             ShiftResponse s = c.shift();
@@ -185,14 +214,12 @@ public class AdminReportService {
                     str(c.claimedAt()),
                     str(c.status()),
                     str(c.source()),
+                    s != null ? names.forShift(s) : "",
                     name(c.caregiverFirstName(), c.caregiverLastName()),
-                    str(c.caregiverEmail()),
                     s != null ? str(s.date()) : "",
                     s != null ? str(s.status()) : "",
                     s != null ? money(s.payRate()) : "",
-                    s != null ? money(s.billRate()) : "",
-                    s != null ? str(s.id()) : "",
-                    str(c.id())));
+                    s != null ? money(s.billRate()) : ""));
         }
         return write(ReportType.CLAIMS, format, ReportMeta.of(
                 "Claims report", actor.getEmail(), filters), headers, rows);
@@ -209,7 +236,7 @@ public class AdminReportService {
 
         List<String> headers = List.of(
                 "Type", "Name", "Email", "Phone", "City", "ZIP", "Status",
-                "View shifts", "Create shifts", "Client ID");
+                "View shifts", "Create shifts");
         List<List<String>> rows = new ArrayList<>();
         for (AdminClientResponse c : page.content()) {
             String displayName = c.clientType() == ClientType.FACILITY && c.facilityName() != null
@@ -224,8 +251,7 @@ public class AdminReportService {
                     str(c.zip()),
                     str(c.status()),
                     c.canViewShifts() ? "Y" : "N",
-                    c.canCreateShifts() ? "Y" : "N",
-                    str(c.id())));
+                    c.canCreateShifts() ? "Y" : "N"));
         }
         return write(ReportType.CLIENTS, format, ReportMeta.of(
                 "Clients report", actor.getEmail(), filters), headers, rows);
@@ -244,7 +270,7 @@ public class AdminReportService {
         filters.put("Status", label(status));
         filters.put("Search", search == null || search.isBlank() ? "All users" : search);
 
-        List<String> headers = List.of("Email", "Role", "Status", "Phone", "Created", "User ID");
+        List<String> headers = List.of("Email", "Role", "Status", "Phone", "Created");
         List<List<String>> rows = new ArrayList<>();
         for (AdminUserResponse u : page.content()) {
             rows.add(List.of(
@@ -252,8 +278,7 @@ public class AdminReportService {
                     str(u.role()),
                     str(u.status()),
                     str(u.phone()),
-                    str(u.createdAt()),
-                    str(u.id())));
+                    str(u.createdAt())));
         }
         return write(ReportType.USERS, format, ReportMeta.of(
                 "Users report", actor.getEmail(), filters), headers, rows);
@@ -264,24 +289,121 @@ public class AdminReportService {
         PagedResponse<AuditLogResponse> page = auditLogService.list(
                 PageRequest.of(0, EXPORT_SIZE, Sort.by(Sort.Direction.DESC, "createdAt")));
 
+        Set<UUID> clientIds = page.content().stream()
+                .map(AuditLogResponse::clientProfileId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(HashSet::new));
+        Map<UUID, String> clientNames = loadFamilyClientNames(clientIds);
+
         Map<String, String> filters = new LinkedHashMap<>();
         filters.put("Scope", "Latest " + page.content().size() + " audit events");
 
         List<String> headers = List.of(
-                "Time", "Action", "Actor", "Entity", "Entity ID", "Client", "Details");
+                "Time", "Action", "Actor", "Entity", "Client", "Details");
         List<List<String>> rows = new ArrayList<>();
         for (AuditLogResponse a : page.content()) {
+            String clientName = a.clientProfileId() == null
+                    ? ""
+                    : clientNames.getOrDefault(a.clientProfileId(), "");
             rows.add(List.of(
                     str(a.createdAt()),
                     str(a.action()),
                     str(a.actorEmail()),
                     str(a.entityType()),
-                    str(a.entityId()),
-                    str(a.clientProfileId()),
+                    clientName,
                     str(a.details())));
         }
         return write(ReportType.AUDIT, format, ReportMeta.of(
                 "Audit log report", actor.getEmail(), filters), headers, rows);
+    }
+
+    private ClientNameIndex loadClientNames(List<ShiftResponse> shifts) {
+        Set<UUID> clientIds = new HashSet<>();
+        Set<UUID> facilityIds = new HashSet<>();
+        for (ShiftResponse s : shifts) {
+            if (s.clientProfileId() != null) {
+                clientIds.add(s.clientProfileId());
+            }
+            if (s.facilityProfileId() != null) {
+                facilityIds.add(s.facilityProfileId());
+            }
+        }
+        return new ClientNameIndex(
+                loadFamilyClientNames(clientIds),
+                loadFacilityNames(facilityIds));
+    }
+
+    private Map<UUID, CaregiverCells> loadActiveCaregiversByShift(List<UUID> shiftIds) {
+        if (shiftIds.isEmpty()) {
+            return Map.of();
+        }
+        List<ShiftClaim> claims = shiftClaimRepository.findByShiftIdInAndStatusIn(
+                shiftIds,
+                EnumSet.of(ShiftClaimStatus.PENDING, ShiftClaimStatus.CONFIRMED));
+        Map<UUID, List<String>> names = new LinkedHashMap<>();
+        for (ShiftClaim claim : claims) {
+            UUID shiftId = claim.getShift().getId();
+            var cg = claim.getCaregiverProfile();
+            if (cg == null) {
+                continue;
+            }
+            String display = name(cg.getFirstName(), cg.getLastName());
+            names.computeIfAbsent(shiftId, ignored -> new ArrayList<>()).add(display);
+        }
+        Map<UUID, CaregiverCells> out = new HashMap<>();
+        for (Map.Entry<UUID, List<String>> entry : names.entrySet()) {
+            out.put(entry.getKey(), new CaregiverCells(String.join("; ", entry.getValue())));
+        }
+        return out;
+    }
+
+    private Map<UUID, String> loadFamilyClientNames(Set<UUID> ids) {
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, String> out = new HashMap<>();
+        for (ClientProfile c : clientProfileRepository.findAllById(ids)) {
+            out.put(c.getId(), name(c.getFirstName(), c.getLastName()));
+        }
+        return out;
+    }
+
+    private Map<UUID, String> loadFacilityNames(Set<UUID> ids) {
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, String> out = new HashMap<>();
+        for (FacilityProfile f : facilityProfileRepository.findAllById(ids)) {
+            out.put(f.getId(), f.getFacilityName() != null ? f.getFacilityName() : "");
+        }
+        return out;
+    }
+
+    private record CaregiverCells(String names) {
+        static final CaregiverCells EMPTY = new CaregiverCells("");
+    }
+
+    private record ClientNameIndex(Map<UUID, String> clients, Map<UUID, String> facilities) {
+        String forShift(ShiftResponse s) {
+            if (s.facilityProfileId() != null) {
+                String facility = facilities.get(s.facilityProfileId());
+                if (facility != null && !facility.isBlank()) {
+                    return facility;
+                }
+            }
+            if (s.clientProfileId() != null) {
+                return clients.getOrDefault(s.clientProfileId(), "");
+            }
+            return "";
+        }
+
+        String client(UUID id) {
+            return clients.getOrDefault(id, str(id));
+        }
+
+        String facility(UUID id) {
+            return facilities.getOrDefault(id, str(id));
+        }
     }
 
     private GeneratedReport write(

@@ -41,8 +41,11 @@ public final class ReportWriters {
     private static final ZoneId ZONE = ZoneId.of("America/New_York");
     private static final DateTimeFormatter WHEN =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm z").withZone(ZONE);
-    private static final Color BRAND = new Color(0x1f, 0x6f, 0xeb);
+    /** Brand teal #0D7377 — matches OkayNow logo / marketing. */
+    private static final Color BRAND = new Color(0x0d, 0x73, 0x77);
     private static final Color INK = new Color(0x12, 0x1a, 0x24);
+    private static final String LOGO_CLASSPATH = "static/branding/okaynow-logo.png";
+    private static final String LOGO_FALLBACK_CLASSPATH = "static/branding/okaynow_primary_logo.png";
 
     private ReportWriters() {
     }
@@ -67,7 +70,7 @@ public final class ReportWriters {
             headerFont.setBold(true);
             headerFont.setColor(IndexedColors.WHITE.getIndex());
             headerStyle.setFont(headerFont);
-            headerStyle.setFillForegroundColor(IndexedColors.DARK_BLUE.getIndex());
+            headerStyle.setFillForegroundColor(IndexedColors.TEAL.getIndex());
             headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
             headerStyle.setAlignment(HorizontalAlignment.LEFT);
 
@@ -78,29 +81,24 @@ public final class ReportWriters {
                 CreationHelper helper = wb.getCreationHelper();
                 Drawing<?> drawing = sheet.createDrawingPatriarch();
                 ClientAnchor anchor = helper.createClientAnchor();
+                anchor.setAnchorType(ClientAnchor.AnchorType.MOVE_DONT_RESIZE);
                 anchor.setCol1(0);
                 anchor.setRow1(0);
                 Picture pict = drawing.createPicture(anchor, pictureIdx);
-                pict.resize(0.35);
-                r = 3;
+                // Primary wordmark is wide (~3.3:1); size for a readable header band.
+                pict.resize(2.4);
+                r = 5;
             }
 
-            Row brand = sheet.createRow(Math.max(r, 0));
             if (logoBytes == null) {
+                Row brand = sheet.createRow(r++);
                 Cell brandCell = brand.createCell(0);
                 brandCell.setCellValue("OkayNow");
                 brandCell.setCellStyle(titleStyle);
-                r = 1;
-            } else {
-                Cell brandCell = brand.createCell(1);
-                brandCell.setCellValue("OkayNow");
-                brandCell.setCellStyle(titleStyle);
-                r = Math.max(r, brand.getRowNum() + 1);
             }
 
             Row subtitle = sheet.createRow(r++);
-            subtitle.createCell(logoBytes != null ? 1 : 0)
-                    .setCellValue("Home care staffing · Massachusetts");
+            subtitle.createCell(0).setCellValue("Home care staffing · Massachusetts");
 
             Row title = sheet.createRow(r++);
             Cell titleCell = title.createCell(0);
@@ -317,26 +315,28 @@ public final class ReportWriters {
     }
 
     private static void addBrandHeader(Document document) throws DocumentException {
-        PdfPTable brandTable = new PdfPTable(new float[]{1f, 5f});
-        brandTable.setWidthPercentage(100);
         Image logo = loadLogo();
-        PdfPCell logoCell = new PdfPCell();
-        logoCell.setBorder(PdfPCell.NO_BORDER);
         if (logo != null) {
-            logo.scaleToFit(48, 48);
-            logoCell.addElement(logo);
+            // Primary wordmark 1200×360 — keep readable on letter width.
+            logo.scaleToFit(200, 60);
+            logo.setAlignment(Image.ALIGN_LEFT);
+            document.add(logo);
+            Font muted = FontFactory.getFont(FontFactory.HELVETICA, 9, Color.DARK_GRAY);
+            Paragraph tag = new Paragraph("Home care staffing · Massachusetts", muted);
+            tag.setSpacingBefore(4);
+            tag.setSpacingAfter(8);
+            document.add(tag);
+            return;
         }
-        brandTable.addCell(logoCell);
 
-        Font brandFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, INK);
+        PdfPTable brandTable = new PdfPTable(1);
+        brandTable.setWidthPercentage(100);
+        Font brandFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, BRAND);
         Font muted = FontFactory.getFont(FontFactory.HELVETICA, 9, Color.DARK_GRAY);
-        Paragraph brandPara = new Paragraph("OkayNow", brandFont);
-        Paragraph tag = new Paragraph("Home care staffing · Massachusetts", muted);
         PdfPCell textCell = new PdfPCell();
         textCell.setBorder(PdfPCell.NO_BORDER);
-        textCell.setVerticalAlignment(PdfPCell.ALIGN_MIDDLE);
-        textCell.addElement(brandPara);
-        textCell.addElement(tag);
+        textCell.addElement(new Paragraph("OkayNow", brandFont));
+        textCell.addElement(new Paragraph("Home care staffing · Massachusetts", muted));
         brandTable.addCell(textCell);
         document.add(brandTable);
     }
@@ -367,8 +367,16 @@ public final class ReportWriters {
     }
 
     private static byte[] loadLogoBytes() {
+        byte[] bytes = readClasspathBytes(LOGO_CLASSPATH);
+        if (bytes != null) {
+            return bytes;
+        }
+        return readClasspathBytes(LOGO_FALLBACK_CLASSPATH);
+    }
+
+    private static byte[] readClasspathBytes(String path) {
         try {
-            ClassPathResource resource = new ClassPathResource("static/branding/okaynow-logo.png");
+            ClassPathResource resource = new ClassPathResource(path);
             if (!resource.exists()) {
                 return null;
             }

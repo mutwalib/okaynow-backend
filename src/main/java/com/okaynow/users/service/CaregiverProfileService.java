@@ -7,6 +7,7 @@ import com.okaynow.users.dto.CaregiverProfileResponse;
 import com.okaynow.users.dto.UpdateCaregiverProfileRequest;
 import com.okaynow.users.mapper.UserMapper;
 import com.okaynow.users.repository.CaregiverProfileRepository;
+import com.okaynow.users.support.LegalNameGuard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,8 +31,9 @@ public class CaregiverProfileService {
     @Transactional
     public CaregiverProfileResponse update(UUID userId, UpdateCaregiverProfileRequest request) {
         CaregiverProfile profile = findByUserId(userId);
-        profile.setFirstName(request.firstName());
-        profile.setLastName(request.lastName());
+        LegalNameGuard.assertUnchanged(
+                profile.getFirstName(), profile.getLastName(),
+                request.firstName(), request.lastName());
         if (request.qualifications() != null) {
             profile.getQualifications().clear();
             profile.getQualifications().addAll(request.qualifications());

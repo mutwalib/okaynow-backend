@@ -9,6 +9,7 @@ import com.okaynow.users.dto.ClientProfileResponse;
 import com.okaynow.users.dto.UpdateClientProfileRequest;
 import com.okaynow.users.mapper.UserMapper;
 import com.okaynow.users.repository.ClientProfileRepository;
+import com.okaynow.users.support.LegalNameGuard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,8 +34,9 @@ public class ClientProfileService {
     @Transactional
     public ClientProfileResponse update(UUID userId, UpdateClientProfileRequest request) {
         ClientProfile profile = findByUserId(userId);
-        profile.setFirstName(request.firstName());
-        profile.setLastName(request.lastName());
+        LegalNameGuard.assertUnchanged(
+                profile.getFirstName(), profile.getLastName(),
+                request.firstName(), request.lastName());
         profile.setAddressLine(request.addressLine());
         profile.setCity(request.city());
         String state = request.state() != null ? request.state() : profile.getState();

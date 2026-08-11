@@ -7,6 +7,7 @@ import com.okaynow.users.domain.User;
 import com.okaynow.users.dto.FacilityProfileResponse;
 import com.okaynow.users.dto.UpdateFacilityProfileRequest;
 import com.okaynow.users.repository.FacilityProfileRepository;
+import com.okaynow.users.support.LegalNameGuard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,8 +29,9 @@ public class FacilityProfileService {
     @Transactional
     public FacilityProfileResponse update(UUID userId, UpdateFacilityProfileRequest request) {
         FacilityProfile profile = findByUserId(userId);
-        profile.setContactFirstName(request.contactFirstName().trim());
-        profile.setContactLastName(request.contactLastName().trim());
+        LegalNameGuard.assertUnchanged(
+                profile.getContactFirstName(), profile.getContactLastName(),
+                request.contactFirstName(), request.contactLastName());
         profile.setAddressLine(request.addressLine().trim());
         profile.setCity(request.city().trim());
         var region = serviceRegionService.validate(request.state(), request.zip());

@@ -16,14 +16,15 @@ import java.util.UUID;
 @Service
 public class LocalFileStorageService {
 
-    private static final Set<String> ALLOWED = Set.of("image/jpeg", "image/png", "image/webp");
+    private static final Set<String> ALLOWED = Set.of(
+            "image/jpeg", "image/jpg", "image/pjpeg", "image/png", "image/webp");
 
     private final Path root;
     private final long maxBytes;
 
     public LocalFileStorageService(
             @Value("${app.upload.dir:./uploads}") String uploadDir,
-            @Value("${app.upload.max-bytes:2097152}") long maxBytes) throws IOException {
+            @Value("${app.upload.max-bytes:5242880}") long maxBytes) throws IOException {
         this.root = Path.of(uploadDir).toAbsolutePath().normalize();
         this.maxBytes = maxBytes;
         Files.createDirectories(this.root.resolve("profiles"));
@@ -35,13 +36,13 @@ public class LocalFileStorageService {
             throw new BadRequestException("Choose a photo to upload");
         }
         if (file.getSize() > maxBytes) {
-            throw new BadRequestException("Photo must be 2 MB or smaller");
+            throw new BadRequestException(
+                    "Photo must be " + (maxBytes / (1024 * 1024)) + " MB or smaller");
         }
-        String contentType = file.getContentType() == null
-                ? ""
-                : file.getContentType().toLowerCase(Locale.US);
+        String contentType = resolveContentType(file);
         if (!ALLOWED.contains(contentType)) {
-            throw new BadRequestException("Photo must be a JPEG, PNG, or WebP image");
+            throw new BadRequestException(
+                    "Photo must be a JPEG, PNG, or WebP image (HEIC photos: choose JPEG or use the app update)");
         }
         String ext = switch (contentType) {
             case "image/png" -> "png";
@@ -56,5 +57,32 @@ public class LocalFileStorageService {
             throw new BadRequestException("Could not save photo");
         }
         return "/uploads/profiles/" + filename;
+    }
+
+    private static String resolveContentType(MultipartFile file) {
+        String contentType = file.getContentType() == null
+                ? ""
+                : file.getContentType().toLowerCase(Locale.US).trim();
+        // React Native / some browsers send octet-stream or empty; sniff by filename.
+        if (contentType.isEmpty()
+                || "application/octet-stream".equals(contentType)
+                || "binary/octet-stream".equals(contentType)) {
+            String name = file.getOriginalFilename() == null
+                    ? ""
+                    : file.getOriginalFilename().toLowerCase(Locale.US);
+            if (name.endsWith(".png")) {
+                return "image/png";
+            }
+            if (name.endsWith(".webp")) {
+                return "image/webp";
+            }
+            if (name.endsWith(".jpg") || name.endsWith(".jpeg")) {
+                return "image/jpeg";
+            }
+        }
+        if ("image/jpg".equals(contentType) || "image/pjpeg".equals(contentType)) {
+            return "image/jpeg";
+        }
+        return contentType;
     }
 }

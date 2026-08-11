@@ -3,6 +3,7 @@ package com.okaynow.booking.controller;
 import com.okaynow.booking.domain.ShiftClaimStatus;
 import com.okaynow.booking.dto.AssignCaregiverRequest;
 import com.okaynow.booking.dto.CancelClaimRequest;
+import com.okaynow.booking.dto.InviteCaregiverRequest;
 import com.okaynow.booking.dto.ShiftClaimResponse;
 import com.okaynow.booking.dto.ExtendShiftRequest;
 import com.okaynow.booking.service.BookingService;
@@ -14,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -80,6 +82,17 @@ public class AdminBookingController {
             @PathVariable UUID id, Authentication authentication) {
         return ResponseEntity.ok(shiftService.unpublish(
                 id, userService.getByEmail(authentication.getName())));
+    }
+
+    @PostMapping("/shifts/{id}/invite")
+    public ResponseEntity<ShiftClaimResponse> invite(
+            @PathVariable UUID id,
+            @Valid @RequestBody InviteCaregiverRequest request,
+            Authentication authentication) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(bookingService.invite(
+                id,
+                request.caregiverProfileId(),
+                userService.getByEmail(authentication.getName())));
     }
 
     @PostMapping("/shifts/{id}/assign")

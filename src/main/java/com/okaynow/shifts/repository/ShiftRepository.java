@@ -94,4 +94,37 @@ public interface ShiftRepository extends JpaRepository<Shift, UUID>, JpaSpecific
     List<Shift> findOpenAssignableForClientFrom(
             @Param("clientProfileId") UUID clientProfileId,
             @Param("fromDate") LocalDate fromDate);
+
+    /**
+     * Open facility marketplace seats eligible for surge / radius escalation.
+     */
+    @Query("""
+            select s from Shift s
+            where s.status = com.okaynow.shifts.domain.ShiftStatus.OPEN
+              and s.marketplacePosted = true
+              and s.marketplaceSlots > 0
+              and s.facilityProfileId is not null
+              and s.date between :from and :to
+            """)
+    List<Shift> findOpenFacilityMarketplaceBetween(
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
+
+    /**
+     * Shifts from today onward that still need caregivers on the open board or
+     * held/claimed partial fill — excludes pure DRAFT private schedule days so
+     * open-ended routines do not flood the ops cockpit.
+     */
+    @Query("""
+            select s from Shift s
+            where s.date >= :fromDate
+              and s.status in (
+                com.okaynow.shifts.domain.ShiftStatus.OPEN,
+                com.okaynow.shifts.domain.ShiftStatus.HELD,
+                com.okaynow.shifts.domain.ShiftStatus.CLAIMED
+              )
+              and s.filledSlots < s.requiredHeadcount
+            order by s.date asc, s.startTime asc
+            """)
+    List<Shift> findOpenUnfilledFrom(@Param("fromDate") LocalDate fromDate);
 }

@@ -8,6 +8,7 @@ import com.okaynow.users.domain.Role;
 import com.okaynow.users.domain.User;
 import com.okaynow.users.domain.UserStatus;
 import com.okaynow.users.repository.ClientProfileRepository;
+import com.okaynow.users.repository.FacilityProfileRepository;
 import com.okaynow.users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -26,6 +27,7 @@ public class NotificationFanoutListener {
     private final NotificationService notificationService;
     private final UserRepository userRepository;
     private final ClientProfileRepository clientProfileRepository;
+    private final FacilityProfileRepository facilityProfileRepository;
     private final ShiftRepository shiftRepository;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -57,13 +59,24 @@ public class NotificationFanoutListener {
             });
         }
 
+        if (shift != null && shift.getFacilityProfileId() != null) {
+            facilityProfileRepository.findById(shift.getFacilityProfileId()).ifPresent(facility -> {
+                if (facility.getUser() != null) {
+                    notifyOnce(notified, facility.getUser(), event, payload);
+                }
+            });
+        }
+
         if (event.caregiverUserId() != null) {
             userRepository.findById(event.caregiverUserId()).ifPresent(cg ->
                     notifyOnce(notified, cg, event, payload));
         }
 
         // New open shifts ping every active caregiver (Uber-style open-board nudge).
-        if (event.type() == NotificationType.SHIFT_POSTED) {
+        // Surge bumps also nudge the board so nearby caregivers see the bonus.
+        if (event.type() == NotificationType.SHIFT_POSTED
+                || event.type() == NotificationType.SHIFT_SURGE_APPLIED
+                || event.type() == NotificationType.SHIFT_ESCALATION_ALERT) {
             for (User caregiver : userRepository.findByRoleAndStatus(Role.CAREGIVER, UserStatus.ACTIVE)) {
                 notifyOnce(notified, caregiver, event, payload);
             }

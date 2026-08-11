@@ -69,4 +69,11 @@ public class ShiftClaim {
 
     @Column(length = 500)
     private String cancelReason;
+
+    /** Estimated one-way drive minutes at claim time (HHA/PCA travel pay). */
+    private Integer travelMinutesEstimate;
+
+    /** Travel pay amount locked at claim time when rule pack enables travel pay. */
+    @Column(precision = 10, scale = 2)
+    private java.math.BigDecimal travelPayAmount;
 }

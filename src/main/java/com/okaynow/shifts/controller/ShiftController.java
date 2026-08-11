@@ -15,6 +15,7 @@ import com.okaynow.shifts.dto.UpdateShiftRequest;
 import com.okaynow.shifts.dto.UpdatePlatformPaymentRequest;
 import com.okaynow.shifts.service.ShiftService;
 import com.okaynow.users.domain.Qualification;
+import com.okaynow.users.domain.Role;
 import com.okaynow.users.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -64,9 +65,13 @@ public class ShiftController {
             @RequestParam(defaultValue = "20") int size,
             Authentication authentication) {
         var actor = userService.getByEmail(authentication.getName());
+        // Admins: newest shift date first. Caregivers/clients: soonest first.
+        Sort sort = actor.getRole() == Role.ADMIN
+                ? Sort.by(Sort.Direction.DESC, "date").and(Sort.by(Sort.Direction.DESC, "startTime"))
+                : Sort.by(Sort.Direction.ASC, "date").and(Sort.by(Sort.Direction.ASC, "startTime"));
         return ResponseEntity.ok(shiftService.search(status, qualification, dateFrom, dateTo,
                 clientProfileId, facilityProfileId, minPay, maxPay, dayPeriod,
-                PageRequest.of(page, Math.min(size, 100), Sort.by("date", "startTime")), actor));
+                PageRequest.of(page, Math.min(size, 100), sort), actor));
     }
 
     @GetMapping("/{id}")
@@ -165,6 +170,18 @@ public class ShiftController {
             @Valid @RequestBody com.okaynow.booking.dto.AssignFromRosterRequest request,
             Authentication authentication) {
         return ResponseEntity.ok(bookingService.assignFromClientRoster(
+                id,
+                request.caregiverProfileId(),
+                userService.getByEmail(authentication.getName())));
+    }
+
+    @PostMapping("/{id}/invite")
+    @PreAuthorize("hasAnyRole('CLIENT', 'FACILITY')")
+    public ResponseEntity<com.okaynow.booking.dto.ShiftClaimResponse> inviteCaregiver(
+            @PathVariable UUID id,
+            @Valid @RequestBody com.okaynow.booking.dto.InviteCaregiverRequest request,
+            Authentication authentication) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(bookingService.invite(
                 id,
                 request.caregiverProfileId(),
                 userService.getByEmail(authentication.getName())));

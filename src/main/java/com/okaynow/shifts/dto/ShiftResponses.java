@@ -62,6 +62,9 @@ public final class ShiftResponses {
                 raw.marketplaceSlots(),
                 raw.requiredHeadcount(),
                 raw.filledSlots(),
+                raw.surgeBonusPay(),
+                raw.surgeTierApplied(),
+                raw.escalationRadiusBonusMiles(),
                 raw.createdBy(),
                 raw.createdAt());
     }

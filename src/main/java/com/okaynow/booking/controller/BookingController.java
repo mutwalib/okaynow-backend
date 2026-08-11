@@ -36,6 +36,20 @@ public class BookingController {
                 .body(bookingService.claim(id, authentication.getName()));
     }
 
+    @PostMapping("/shifts/{id}/accept-invite")
+    @PreAuthorize("hasRole('CAREGIVER')")
+    public ResponseEntity<ShiftClaimResponse> acceptInvite(
+            @PathVariable UUID id, Authentication authentication) {
+        return ResponseEntity.ok(bookingService.acceptInvite(id, authentication.getName()));
+    }
+
+    @PostMapping("/shifts/{id}/decline-invite")
+    @PreAuthorize("hasRole('CAREGIVER')")
+    public ResponseEntity<ShiftClaimResponse> declineInvite(
+            @PathVariable UUID id, Authentication authentication) {
+        return ResponseEntity.ok(bookingService.declineInvite(id, authentication.getName()));
+    }
+
     @PostMapping("/shifts/{id}/release")
     @PreAuthorize("hasRole('CAREGIVER')")
     public ResponseEntity<ShiftClaimResponse> release(@PathVariable UUID id, Authentication authentication) {

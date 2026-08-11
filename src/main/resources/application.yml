@@ -15,8 +15,8 @@ spring:
         format_sql: true
   servlet:
     multipart:
-      max-file-size: 2MB
-      max-request-size: 2MB
+      max-file-size: 5MB
+      max-request-size: 5MB
 
 server:
   port: 8080
@@ -35,7 +35,7 @@ app:
     password: ${ADMIN_BOOTSTRAP_PASSWORD:admin123}
   upload:
     dir: ${APP_UPLOAD_DIR:./uploads}
-    max-bytes: ${APP_UPLOAD_MAX_BYTES:2097152}
+    max-bytes: ${APP_UPLOAD_MAX_BYTES:5242880}
   service-region:
     # Comma-expand later (e.g. MA,RI). ZIP prefixes keep postal checks strict per state.
     # Quote ZIP3 values — unquoted 010 is parsed as a number and loses the leading zero.

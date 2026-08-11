@@ -12,9 +12,9 @@ import com.okaynow.common.dto.PagedResponse;
 import com.okaynow.common.exception.BadRequestException;
 import com.okaynow.common.exception.ConflictException;
 import com.okaynow.common.exception.ResourceNotFoundException;
-import com.okaynow.common.geo.GeoUtils;
 import com.okaynow.common.geo.ServiceRegionService;
 import com.okaynow.evv.support.ShiftWindows;
+import com.okaynow.marketplace.service.MarketplaceEligibilityService;
 import com.okaynow.notifications.domain.NotificationType;
 import com.okaynow.notifications.service.ShiftEventPublisher;
 import com.okaynow.payroll.domain.AgencySettings;
@@ -84,6 +84,7 @@ public class ShiftService {
     private final AgencySettingsService agencySettingsService;
     private final ClientStaffingService clientStaffingService;
     private final BookingService bookingService;
+    private final MarketplaceEligibilityService marketplaceEligibilityService;
 
     @Transactional
     public CreateShiftResponse create(CreateShiftRequest request, User actor) {
@@ -575,6 +576,7 @@ public class ShiftService {
         // are accessed via My shifts (claims), not the marketplace list.
         ShiftStatus effectiveStatus = status;
         CaregiverProfile caregiverJurisdiction = null;
+        LocalDate effectiveDateFrom = dateFrom;
         if (actor.getRole() == Role.CAREGIVER) {
             if (effectiveStatus != null && effectiveStatus != ShiftStatus.OPEN) {
                 throw new AccessDeniedException(
@@ -582,6 +584,10 @@ public class ShiftService {
             }
             effectiveStatus = ShiftStatus.OPEN;
             caregiverJurisdiction = caregiverProfileRepository.findByUserId(actor.getId()).orElse(null);
+            LocalDate today = LocalDate.now(ShiftWindows.ZONE);
+            if (effectiveDateFrom == null || effectiveDateFrom.isBefore(today)) {
+                effectiveDateFrom = today;
+            }
         }
 
         String rateField = (actor.getRole() == Role.CLIENT || actor.getRole() == Role.FACILITY)
@@ -589,7 +595,7 @@ public class ShiftService {
                 : "payRate";
         org.springframework.data.jpa.domain.Specification<Shift> filters =
                 ShiftSpecifications.withFilters(
-                        effectiveStatus, qualification, dateFrom, dateTo, clientProfileId,
+                        effectiveStatus, qualification, effectiveDateFrom, dateTo, clientProfileId,
                         facilityProfileId, minPay, maxPay, rateField, dayPeriod);
         // Owners' boards: drafts stay off the default list until released.
         // Explicit status=DRAFT still returns them. HELD remains visible.
@@ -606,17 +612,10 @@ public class ShiftService {
 
         Page<Shift> page = shiftRepository.findAll(filters, pageable);
 
-        if (caregiverJurisdiction != null
-                && caregiverJurisdiction.getHomeLat() != null
-                && caregiverJurisdiction.getHomeLng() != null
-                && caregiverJurisdiction.getServiceRadiusMiles() != null
-                && caregiverJurisdiction.getServiceRadiusMiles() > 0) {
-            Double lat = caregiverJurisdiction.getHomeLat();
-            Double lng = caregiverJurisdiction.getHomeLng();
-            Integer radius = caregiverJurisdiction.getServiceRadiusMiles();
+        if (caregiverJurisdiction != null) {
+            CaregiverProfile caregiver = caregiverJurisdiction;
             List<Shift> filtered = page.getContent().stream()
-                    .filter(shift -> GeoUtils.withinRadiusMiles(
-                            lat, lng, shift.getLat(), shift.getLng(), radius))
+                    .filter(shift -> marketplaceEligibilityService.isEligible(caregiver, shift))
                     .toList();
             page = new PageImpl<>(filtered, pageable, filtered.size());
         }

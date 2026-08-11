@@ -13,9 +13,12 @@ import com.okaynow.common.dto.PagedResponse;
 import com.okaynow.common.exception.BadRequestException;
 import com.okaynow.common.exception.ConflictException;
 import com.okaynow.common.exception.ResourceNotFoundException;
-import com.okaynow.common.geo.GeoUtils;
 import com.okaynow.evv.service.VisitService;
 import com.okaynow.evv.support.ShiftWindows;
+import com.okaynow.marketplace.domain.QualificationRulePack;
+import com.okaynow.marketplace.service.DriveTimeService;
+import com.okaynow.marketplace.service.MarketplaceEligibilityService;
+import com.okaynow.marketplace.service.QualificationRulePackService;
 import com.okaynow.notifications.domain.NotificationType;
 import com.okaynow.notifications.service.ShiftEventPublisher;
 import com.okaynow.payroll.domain.AgencySettings;
@@ -78,6 +81,9 @@ public class BookingService {
     private final ShiftEventPublisher shiftEventPublisher;
     private final AgencySettingsService agencySettingsService;
     private final ClientStaffingService clientStaffingService;
+    private final MarketplaceEligibilityService marketplaceEligibilityService;
+    private final QualificationRulePackService qualificationRulePackService;
+    private final DriveTimeService driveTimeService;
 
     /**
      * Caregiver claims an OPEN shift. Pessimistic locks are taken on the caregiver profile
@@ -93,6 +99,9 @@ public class BookingService {
         if (shift.getStatus() != ShiftStatus.OPEN) {
             throw new ConflictException("Shift is not open for claiming");
         }
+        if (shift.getDate() != null && shift.getDate().isBefore(LocalDate.now(ShiftWindows.ZONE))) {
+            throw new BadRequestException("Cannot claim a shift on a past date");
+        }
         if (!shift.isMarketplacePosted() || shift.getMarketplaceSlots() < 1) {
             throw new ConflictException("No marketplace slots are open on this shift");
         }
@@ -103,11 +112,7 @@ public class BookingService {
                 shiftId, caregiver.getId(), ACTIVE_CLAIM_STATUSES).isPresent()) {
             throw new ConflictException("You already have an active claim on this shift");
         }
-        if (!caregiver.getQualifications().contains(shift.getRequiredQualification())) {
-            throw new BadRequestException(
-                    "Caregiver does not have the required qualification: " + shift.getRequiredQualification());
-        }
-        assertWithinJurisdiction(caregiver, shift);
+        marketplaceEligibilityService.assertCanClaim(caregiver, shift);
         assertNoOverlappingClaim(caregiver.getId(), shift);
 
         ShiftClaim claim = ShiftClaim.builder()
@@ -116,6 +121,7 @@ public class BookingService {
                 .status(ShiftClaimStatus.PENDING)
                 .source(ClaimSource.MARKETPLACE)
                 .build();
+        attachTravelEconomics(claim, caregiver, shift);
         shiftClaimRepository.save(claim);
         // Remaining headcount stays on the marketplace (refreshShiftFill syncs slots).
         refreshShiftFill(shift);
@@ -134,8 +140,14 @@ public class BookingService {
      * Agency assigns a caregiver without requiring a marketplace claim.
      * From DRAFT or HELD: private assignment (not visible on the open board).
      * From OPEN: fills a slot; stays open until all slots are filled.
+     * <p>
+     * Business validation failures do not roll back an outer transaction so roster
+     * auto-fill can try the next caregiver (schedule calendar materialization).
      */
-    @Transactional
+    @Transactional(noRollbackFor = {
+            BadRequestException.class,
+            ConflictException.class
+    })
     public ShiftClaimResponse assign(UUID shiftId, UUID caregiverProfileId, String adminEmail) {
         CaregiverProfile caregiver = caregiverProfileRepository.findById(caregiverProfileId)
                 .orElseThrow(() -> new ResourceNotFoundException("Caregiver not found"));
@@ -157,11 +169,7 @@ public class BookingService {
                 shiftId, caregiver.getId(), ACTIVE_CLAIM_STATUSES).isPresent()) {
             throw new ConflictException("This caregiver is already assigned to this shift");
         }
-        if (!caregiver.getQualifications().contains(shift.getRequiredQualification())) {
-            throw new BadRequestException(
-                    "Caregiver does not have the required qualification: " + shift.getRequiredQualification());
-        }
-        assertWithinJurisdiction(caregiver, shift);
+        marketplaceEligibilityService.assertCanAssign(caregiver, shift);
         assertNoOverlappingClaim(caregiver.getId(), shift);
 
         ShiftClaim claim = ShiftClaim.builder()
@@ -170,6 +178,7 @@ public class BookingService {
                 .status(ShiftClaimStatus.CONFIRMED)
                 .source(ClaimSource.ASSIGNED)
                 .build();
+        attachTravelEconomics(claim, caregiver, shift);
         claim = shiftClaimRepository.save(claim);
         refreshShiftFill(shift);
 
@@ -193,6 +202,182 @@ public class BookingService {
     }
 
     /**
+     * Invite a specific caregiver privately (or onto an OPEN shift). Creates a PENDING
+     * INVITE claim — the caregiver must accept or decline. Does not auto-confirm.
+     * Overlap at invite time fails and notifies the client/admin inviter side.
+     */
+    @Transactional
+    public ShiftClaimResponse invite(UUID shiftId, UUID caregiverProfileId, User actor) {
+        CaregiverProfile caregiver = caregiverProfileRepository.findById(caregiverProfileId)
+                .orElseThrow(() -> new ResourceNotFoundException("Caregiver not found"));
+        caregiver = caregiverProfileRepository.findByUserIdForUpdate(caregiver.getUser().getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Caregiver profile not found"));
+        Shift shift = lockShift(shiftId);
+        assertCanInvite(actor, shift, caregiverProfileId);
+
+        if (shift.getStatus() != ShiftStatus.OPEN
+                && shift.getStatus() != ShiftStatus.DRAFT
+                && shift.getStatus() != ShiftStatus.HELD
+                && shift.getStatus() != ShiftStatus.CLAIMED) {
+            throw new ConflictException(
+                    "Only DRAFT, HELD, CLAIMED, or OPEN shifts can receive invitations");
+        }
+        if (activeClaimCount(shift.getId()) >= requiredHeadcount(shift)) {
+            throw new ConflictException("This shift is already fully staffed");
+        }
+        if (shiftClaimRepository.findFirstByShiftIdAndCaregiverProfileIdAndStatusIn(
+                shiftId, caregiver.getId(), ACTIVE_CLAIM_STATUSES).isPresent()) {
+            throw new ConflictException("This caregiver already has an active claim on this shift");
+        }
+        marketplaceEligibilityService.assertCanClaim(caregiver, shift);
+        try {
+            assertNoOverlappingClaim(caregiver.getId(), shift);
+        } catch (ConflictException overlap) {
+            notifyInviteFailed(shift, caregiver, overlap.getMessage());
+            throw overlap;
+        }
+
+        ShiftClaim claim = ShiftClaim.builder()
+                .shift(shift)
+                .caregiverProfile(caregiver)
+                .status(ShiftClaimStatus.PENDING)
+                .source(ClaimSource.INVITE)
+                .build();
+        attachTravelEconomics(claim, caregiver, shift);
+        claim = shiftClaimRepository.save(claim);
+        refreshShiftFill(shift);
+
+        auditLogService.record(actor, AuditAction.CAREGIVER_INVITED_TO_SHIFT, "SHIFT",
+                shift.getId(), shift.getClientProfileId(),
+                "caregiver=%s claim=%s invite pending filled=%s/%s".formatted(
+                        caregiver.getId(), claim.getId(),
+                        shift.getFilledSlots(), requiredHeadcount(shift)));
+        shiftEventPublisher.publish(
+                NotificationType.SHIFT_INVITED,
+                shift,
+                caregiver.getUser().getId(),
+                "You're invited to a shift",
+                "You've been invited to the " + shift.getDate() + " shift in " + shift.getCity()
+                        + ". Accept or decline from My shifts.");
+        return toResponse(claim);
+    }
+
+    /**
+     * Caregiver accepts a PENDING INVITE. Confirms the seat; fails on overlap and
+     * notifies the inviter (client + admins via fanout).
+     */
+    @Transactional
+    public ShiftClaimResponse acceptInvite(UUID shiftId, String caregiverEmail) {
+        CaregiverProfile caregiver = lockCaregiverByEmail(caregiverEmail);
+        Shift shift = lockShift(shiftId);
+        ShiftClaim claim = shiftClaimRepository
+                .findFirstByShiftIdAndCaregiverProfileIdAndStatusIn(
+                        shiftId, caregiver.getId(), EnumSet.of(ShiftClaimStatus.PENDING))
+                .orElseThrow(() -> new ResourceNotFoundException("No pending invitation on this shift"));
+        if (claim.getSource() != ClaimSource.INVITE) {
+            throw new ConflictException("This claim is not a private invitation");
+        }
+        if (shift.getDate() != null && shift.getDate().isBefore(LocalDate.now(ShiftWindows.ZONE))) {
+            throw new BadRequestException("Cannot accept an invite for a past-dated shift");
+        }
+        try {
+            assertNoOverlappingClaim(caregiver.getId(), shift);
+        } catch (ConflictException overlap) {
+            claim.setStatus(ShiftClaimStatus.CANCELLED);
+            claim.setReleasedAt(Instant.now());
+            claim.setCancelReason("Invite failed: overlapping shift");
+            refreshShiftFill(shift);
+            notifyInviteFailed(shift, caregiver, overlap.getMessage());
+            throw new ConflictException(
+                    "You already have another shift overlapping this time. The inviter has been notified.");
+        }
+
+        claim.setStatus(ShiftClaimStatus.CONFIRMED);
+        refreshShiftFill(shift);
+        shiftEventPublisher.publish(
+                NotificationType.SHIFT_INVITE_ACCEPTED,
+                shift,
+                caregiver.getUser().getId(),
+                "Invitation accepted",
+                caregiver.getFirstName() + " " + caregiver.getLastName()
+                        + " accepted the invite for the " + shift.getDate() + " shift.");
+        shiftEventPublisher.publish(
+                NotificationType.SHIFT_CONFIRMED,
+                shift,
+                caregiver.getUser().getId(),
+                "Shift confirmed",
+                "You accepted the " + shift.getDate() + " shift in " + shift.getCity() + ".");
+        return toResponse(claim, true);
+    }
+
+    /**
+     * Caregiver declines a PENDING INVITE; notifies the inviter.
+     */
+    @Transactional
+    public ShiftClaimResponse declineInvite(UUID shiftId, String caregiverEmail) {
+        CaregiverProfile caregiver = lockCaregiverByEmail(caregiverEmail);
+        Shift shift = lockShift(shiftId);
+        ShiftClaim claim = shiftClaimRepository
+                .findFirstByShiftIdAndCaregiverProfileIdAndStatusIn(
+                        shiftId, caregiver.getId(), EnumSet.of(ShiftClaimStatus.PENDING))
+                .orElseThrow(() -> new ResourceNotFoundException("No pending invitation on this shift"));
+        if (claim.getSource() != ClaimSource.INVITE) {
+            throw new ConflictException("This claim is not a private invitation");
+        }
+
+        claim.setStatus(ShiftClaimStatus.CANCELLED);
+        claim.setReleasedAt(Instant.now());
+        claim.setCancelReason("Declined invitation");
+        refreshShiftFill(shift);
+        shiftEventPublisher.publish(
+                NotificationType.SHIFT_INVITE_DECLINED,
+                shift,
+                caregiver.getUser().getId(),
+                "Invitation declined",
+                caregiver.getFirstName() + " " + caregiver.getLastName()
+                        + " declined the invite for the " + shift.getDate() + " shift.");
+        return toResponse(claim, true);
+    }
+
+    private void assertCanInvite(User actor, Shift shift, UUID caregiverProfileId) {
+        if (actor.getRole() == Role.ADMIN) {
+            return;
+        }
+        if (actor.getRole() == Role.CLIENT) {
+            ClientProfile client = clientProfileRepository.findByUserId(actor.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Client profile not found"));
+            if (shift.getClientProfileId() == null
+                    || !shift.getClientProfileId().equals(client.getId())) {
+                throw new AccessDeniedException("Not your shift");
+            }
+            if (!clientStaffingService.isOnClientRoster(client.getId(), caregiverProfileId)) {
+                throw new BadRequestException("That caregiver is not on your roster");
+            }
+            return;
+        }
+        if (actor.getRole() == Role.FACILITY) {
+            FacilityProfile facility = facilityProfileRepository.findByUserId(actor.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Facility profile not found"));
+            if (shift.getFacilityProfileId() == null
+                    || !shift.getFacilityProfileId().equals(facility.getId())) {
+                throw new AccessDeniedException("Not your shift");
+            }
+            return;
+        }
+        throw new AccessDeniedException("Not allowed to invite caregivers");
+    }
+
+    private void notifyInviteFailed(Shift shift, CaregiverProfile caregiver, String reason) {
+        shiftEventPublisher.publish(
+                NotificationType.SHIFT_INVITE_FAILED,
+                shift,
+                caregiver.getUser().getId(),
+                "Invitation could not be completed",
+                caregiver.getFirstName() + " " + caregiver.getLastName()
+                        + " could not take the " + shift.getDate() + " shift: " + reason);
+    }
+
+    /**
      * Caregiver releases their own PENDING claim; frees a slot on the shift.
      */
     @Transactional
@@ -205,6 +390,10 @@ public class BookingService {
                 .orElseThrow(() -> new ResourceNotFoundException("No active claim by this caregiver on this shift"));
         if (claim.getStatus() != ShiftClaimStatus.PENDING) {
             throw new ConflictException("Only PENDING claims can be released; contact the agency to cancel");
+        }
+        // Private invites use the dedicated decline path for clearer inviter messaging.
+        if (claim.getSource() == ClaimSource.INVITE) {
+            return declineInvite(shiftId, caregiverEmail);
         }
 
         claim.setStatus(ShiftClaimStatus.CANCELLED);
@@ -1165,20 +1354,21 @@ public class BookingService {
         shift.setStatus(ShiftStatus.DRAFT);
     }
 
+    private void attachTravelEconomics(ShiftClaim claim, CaregiverProfile caregiver, Shift shift) {
+        QualificationRulePack pack =
+                qualificationRulePackService.getOrCreate(shift.getRequiredQualification());
+        int minutes = driveTimeService.estimateDriveMinutes(
+                caregiver.getHomeLat(), caregiver.getHomeLng(),
+                shift.getLat(), shift.getLng());
+        claim.setTravelMinutesEstimate(minutes > 0 ? minutes : null);
+        BigDecimal travelPay = driveTimeService.travelPayAmount(pack, minutes);
+        claim.setTravelPayAmount(travelPay.signum() > 0 ? travelPay : null);
+    }
+
     private boolean hasActiveMarketplaceClaim(UUID shiftId) {
         return shiftClaimRepository.findByShiftIdOrderByClaimedAtDesc(shiftId).stream()
                 .anyMatch(c -> ACTIVE_CLAIM_STATUSES.contains(c.getStatus())
                         && c.getSource() == ClaimSource.MARKETPLACE);
-    }
-
-    private void assertWithinJurisdiction(CaregiverProfile caregiver, Shift shift) {
-        if (!GeoUtils.withinRadiusMiles(
-                caregiver.getHomeLat(), caregiver.getHomeLng(),
-                shift.getLat(), shift.getLng(),
-                caregiver.getServiceRadiusMiles())) {
-            throw new BadRequestException(
-                    "This shift is outside the caregiver's service area (jurisdiction)");
-        }
     }
 
     private CaregiverProfile lockCaregiverByEmail(String email) {

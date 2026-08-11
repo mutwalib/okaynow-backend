@@ -35,6 +35,9 @@ public record ShiftResponse(
         int marketplaceSlots,
         int requiredHeadcount,
         int filledSlots,
+        java.math.BigDecimal surgeBonusPay,
+        int surgeTierApplied,
+        int escalationRadiusBonusMiles,
         UUID createdBy,
         Instant createdAt
 ) {

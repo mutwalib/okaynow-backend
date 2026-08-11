@@ -16,6 +16,7 @@ import com.okaynow.evv.dto.ClockOutRequest;
 import com.okaynow.evv.dto.VisitResponse;
 import com.okaynow.evv.repository.VisitRepository;
 import com.okaynow.evv.support.ShiftWindows;
+import com.okaynow.marketplace.service.QualificationRulePackService;
 import com.okaynow.notifications.domain.NotificationType;
 import com.okaynow.notifications.service.ShiftEventPublisher;
 import com.okaynow.shifts.domain.Shift;
@@ -60,6 +61,7 @@ public class VisitService {
     private final UserService userService;
     private final AuditLogService auditLogService;
     private final ShiftEventPublisher shiftEventPublisher;
+    private final QualificationRulePackService qualificationRulePackService;
 
     @Transactional
     public VisitResponse clockIn(UUID shiftId, String caregiverEmail, ClockInRequest request) {
@@ -89,6 +91,11 @@ public class VisitService {
         assertCaregiverClockInWindow(shift, caregiver.getId());
 
         boolean hasGps = request != null && request.lat() != null && request.lng() != null;
+        var pack = qualificationRulePackService.getOrCreate(shift.getRequiredQualification());
+        if (pack.isEvvRequired() && !hasGps) {
+            throw new BadRequestException(
+                    "GPS clock-in is required for " + pack.getQualification() + " visits (EVV)");
+        }
         Visit visit = Visit.builder()
                 .shiftId(shiftId)
                 .claimId(claim.getId())

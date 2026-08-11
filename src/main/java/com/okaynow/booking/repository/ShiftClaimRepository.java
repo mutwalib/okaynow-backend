@@ -124,4 +124,24 @@ public interface ShiftClaimRepository extends JpaRepository<ShiftClaim, UUID> {
             @Param("caregiverProfileId") UUID caregiverProfileId,
             @Param("fromDate") LocalDate fromDate,
             @Param("statuses") Collection<ShiftClaimStatus> statuses);
+
+    @Query("""
+            select c.caregiverProfile.id, count(c) from ShiftClaim c
+            where c.shift.clientProfileId = :clientProfileId
+              and c.status = :completed
+            group by c.caregiverProfile.id
+            """)
+    List<Object[]> countCompletedByCaregiverForClient(
+            @Param("clientProfileId") UUID clientProfileId,
+            @Param("completed") ShiftClaimStatus completed);
+
+    @Query("""
+            select c.caregiverProfile.id, count(c) from ShiftClaim c
+            where c.shift.facilityProfileId = :facilityProfileId
+              and c.status = :completed
+            group by c.caregiverProfile.id
+            """)
+    List<Object[]> countCompletedByCaregiverForFacility(
+            @Param("facilityProfileId") UUID facilityProfileId,
+            @Param("completed") ShiftClaimStatus completed);
 }

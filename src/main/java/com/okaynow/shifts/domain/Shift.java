@@ -144,6 +144,24 @@ public class Shift {
     @Builder.Default
     private int filledSlots = 0;
 
+    /**
+     * Extra $/hr paid to the caregiver when facility escalation applies.
+     * Mirrored onto billRate so the facility funds the surge.
+     */
+    @Column(nullable = false, precision = 8, scale = 2, columnDefinition = "numeric(8,2) default 0")
+    @Builder.Default
+    private BigDecimal surgeBonusPay = BigDecimal.ZERO;
+
+    /** Highest escalation tier applied (0 = none, 1–3). */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    @Builder.Default
+    private int surgeTierApplied = 0;
+
+    /** Temporary radius expand (miles) from facility escalation. */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    @Builder.Default
+    private int escalationRadiusBonusMiles = 0;
+
     @Column(name = "created_by", nullable = false)
     private UUID createdBy;
 

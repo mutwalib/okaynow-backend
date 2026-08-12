@@ -70,7 +70,7 @@
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/config/AdminBootstrapConfig.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/config/ClientInvoiceNullableClientBackfill.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/config/CorsConfig.java
-/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/config/EmailVerifiedBackfill.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/config/EmailVerifiedSchemaFix.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/config/FacilitySettlementBillToBackfill.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/config/JpaConfig.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/config/MarketplacePostedBackfill.java
@@ -253,6 +253,7 @@
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/users/repository/ClientProfileRepository.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/users/repository/FacilityProfileRepository.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/users/repository/UserRepository.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/users/service/AccountDeletionService.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/users/service/CaregiverProfileService.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/users/service/ClientProfileService.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/users/service/FacilityProfileService.java

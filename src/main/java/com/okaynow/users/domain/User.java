@@ -51,7 +51,8 @@ public class User {
     @Builder.Default
     private UserStatus status = UserStatus.ACTIVE;
 
-    @Column(nullable = false)
+    /** Default in columnDefinition so ddl-auto can add the column on existing DBs. */
+    @Column(nullable = false, columnDefinition = "boolean not null default false")
     @Builder.Default
     private boolean emailVerified = false;
 

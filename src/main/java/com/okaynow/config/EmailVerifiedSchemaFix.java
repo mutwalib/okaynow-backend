@@ -9,19 +9,24 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * Existing ACTIVE accounts predate email verification — treat them as verified.
+ * Hibernate {@code ddl-auto=update} cannot add {@code email_verified boolean not null}
+ * when rows already exist (no default). Ensure the column before admin bootstrap / JPA use.
  */
 @Component
-@Order(20)
+@Order(5)
 @RequiredArgsConstructor
 @Slf4j
-public class EmailVerifiedBackfill implements ApplicationRunner {
+public class EmailVerifiedSchemaFix implements ApplicationRunner {
 
     private final JdbcTemplate jdbcTemplate;
 
     @Override
     public void run(ApplicationArguments args) {
         try {
+            jdbcTemplate.execute("""
+                    ALTER TABLE users
+                    ADD COLUMN IF NOT EXISTS email_verified boolean NOT NULL DEFAULT FALSE
+                    """);
             int n = jdbcTemplate.update("""
                     UPDATE users
                     SET email_verified = TRUE,
@@ -33,7 +38,7 @@ public class EmailVerifiedBackfill implements ApplicationRunner {
                 log.info("Marked {} existing ACTIVE users as email-verified", n);
             }
         } catch (Exception ex) {
-            log.debug("email_verified backfill skipped: {}", ex.getMessage());
+            log.warn("email_verified schema fix skipped: {}", ex.getMessage());
         }
     }
 }

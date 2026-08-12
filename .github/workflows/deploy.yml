@@ -47,15 +47,23 @@ jobs:
             sudo install -o ubuntu -g ubuntu -m 644 /tmp/okaynow-backend-0.1.0.jar /opt/okaynow/backend/app.jar
             rm -f /tmp/okaynow-backend-0.1.0.jar
             sudo systemctl restart okaynow-backend
-            for i in $(seq 1 30); do
-              code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/api/auth/login || true)
-              if [ -n "$code" ] && [ "$code" != "000" ]; then
-                echo "Backend listening (HTTP $code)"
+            # Small EC2 needs ~20–40s for Spring Boot; wait up to ~3 minutes.
+            for i in $(seq 1 60); do
+              code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/api/legal/current || true)
+              if [ "$code" = "200" ]; then
+                echo "Backend ready (HTTP $code after ${i} checks)"
+                systemctl is-active okaynow-backend
                 exit 0
               fi
-              sleep 2
+              # Fail fast if the unit crashed and is no longer starting
+              state=$(systemctl is-active okaynow-backend || true)
+              if [ "$state" = "failed" ]; then
+                echo "Backend unit failed"
+                break
+              fi
+              sleep 3
             done
             echo "Backend failed to become ready"
             sudo systemctl status okaynow-backend --no-pager || true
-            sudo journalctl -u okaynow-backend -n 60 --no-pager || true
+            sudo journalctl -u okaynow-backend -n 80 --no-pager || true
             exit 1

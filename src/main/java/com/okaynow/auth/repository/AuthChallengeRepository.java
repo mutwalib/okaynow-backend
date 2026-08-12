@@ -28,4 +28,15 @@ public interface AuthChallengeRepository extends JpaRepository<AuthChallenge, UU
             @Param("userId") UUID userId,
             @Param("purpose") AuthChallengePurpose purpose,
             @Param("now") Instant now);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update AuthChallenge c
+            set c.consumedAt = :now
+            where c.userId = :userId
+              and c.consumedAt is null
+            """)
+    int consumeAllOpenChallenges(
+            @Param("userId") UUID userId,
+            @Param("now") Instant now);
 }

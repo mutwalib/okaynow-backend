@@ -22,6 +22,10 @@ public interface ShiftClaimRepository extends JpaRepository<ShiftClaim, UUID> {
     @EntityGraph(attributePaths = {"shift"})
     Page<ShiftClaim> findByCaregiverProfileId(UUID caregiverProfileId, Pageable pageable);
 
+    @EntityGraph(attributePaths = {"shift"})
+    List<ShiftClaim> findByCaregiverProfileIdAndStatusIn(
+            UUID caregiverProfileId, Collection<ShiftClaimStatus> statuses);
+
     @EntityGraph(attributePaths = {"shift", "caregiverProfile", "caregiverProfile.user"})
     Page<ShiftClaim> findAllBy(Pageable pageable);
 

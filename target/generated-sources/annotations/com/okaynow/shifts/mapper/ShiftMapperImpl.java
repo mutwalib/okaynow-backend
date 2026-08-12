@@ -15,8 +15,8 @@ import org.springframework.stereotype.Component;
 
 @Generated(
     value = "org.mapstruct.ap.MappingProcessor",
-    date = "2026-07-30T20:57:12-0400",
-    comments = "version: 1.5.5.Final, compiler: javac, environment: Java 21.0.7 (Homebrew)"
+    date = "2026-08-11T16:40:13-0400",
+    comments = "version: 1.5.5.Final, compiler: javac, environment: Java 26.0.1 (Eclipse Adoptium)"
 )
 @Component
 public class ShiftMapperImpl implements ShiftMapper {
@@ -51,6 +51,9 @@ public class ShiftMapperImpl implements ShiftMapper {
         int marketplaceSlots = 0;
         int requiredHeadcount = 0;
         int filledSlots = 0;
+        BigDecimal surgeBonusPay = null;
+        int surgeTierApplied = 0;
+        int escalationRadiusBonusMiles = 0;
         UUID createdBy = null;
         Instant createdAt = null;
 
@@ -78,10 +81,13 @@ public class ShiftMapperImpl implements ShiftMapper {
         marketplaceSlots = shift.getMarketplaceSlots();
         requiredHeadcount = shift.getRequiredHeadcount();
         filledSlots = shift.getFilledSlots();
+        surgeBonusPay = shift.getSurgeBonusPay();
+        surgeTierApplied = shift.getSurgeTierApplied();
+        escalationRadiusBonusMiles = shift.getEscalationRadiusBonusMiles();
         createdBy = shift.getCreatedBy();
         createdAt = shift.getCreatedAt();
 
-        ShiftResponse shiftResponse = new ShiftResponse( id, clientProfileId, facilityProfileId, requiredQualification, date, startTime, endTime, addressLine, city, state, zip, lat, lng, payRate, billRate, status, scheduleType, seriesId, notes, platformPaid, marketplacePosted, marketplaceSlots, requiredHeadcount, filledSlots, createdBy, createdAt );
+        ShiftResponse shiftResponse = new ShiftResponse( id, clientProfileId, facilityProfileId, requiredQualification, date, startTime, endTime, addressLine, city, state, zip, lat, lng, payRate, billRate, status, scheduleType, seriesId, notes, platformPaid, marketplacePosted, marketplaceSlots, requiredHeadcount, filledSlots, surgeBonusPay, surgeTierApplied, escalationRadiusBonusMiles, createdBy, createdAt );
 
         return shiftResponse;
     }

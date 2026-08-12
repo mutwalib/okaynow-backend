@@ -49,6 +49,10 @@ public class AdminBootstrapConfig implements ApplicationRunner {
             existing.setPasswordHash(hash);
             existing.setRole(Role.ADMIN);
             existing.setStatus(UserStatus.ACTIVE);
+            existing.setEmailVerified(true);
+            if (existing.getEmailVerifiedAt() == null) {
+                existing.setEmailVerifiedAt(java.time.Instant.now());
+            }
             userRepository.save(existing);
             log.warn("Reset platform owner credentials for {}. Remove bootstrap credentials from the environment in production.",
                     normalizedEmail);
@@ -58,6 +62,8 @@ public class AdminBootstrapConfig implements ApplicationRunner {
                     .passwordHash(hash)
                     .role(Role.ADMIN)
                     .status(UserStatus.ACTIVE)
+                    .emailVerified(true)
+                    .emailVerifiedAt(java.time.Instant.now())
                     .build());
             log.warn("Bootstrapped platform owner {}. Remove bootstrap credentials from the environment in production.",
                     normalizedEmail);

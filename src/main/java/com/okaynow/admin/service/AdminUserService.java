@@ -58,6 +58,8 @@ public class AdminUserService {
                 .passwordHash(passwordEncoder.encode(request.password()))
                 .role(Role.ADMIN)
                 .status(UserStatus.ACTIVE)
+                .emailVerified(true)
+                .emailVerifiedAt(java.time.Instant.now())
                 .build());
         return toResponse(user);
     }

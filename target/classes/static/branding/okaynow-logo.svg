@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="OkayNow">
-  <rect width="128" height="128" rx="28" fill="#121a24"/>
-  <circle cx="64" cy="64" r="38" fill="none" stroke="#1f6feb" stroke-width="10"/>
-  <path d="M44 72c8 14 32 14 40 0" fill="none" stroke="#e8eef4" stroke-width="8" stroke-linecap="round"/>
-  <circle cx="50" cy="54" r="5" fill="#e8eef4"/>
-  <circle cx="78" cy="54" r="5" fill="#e8eef4"/>
-</svg>

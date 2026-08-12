@@ -92,6 +92,8 @@ public class AdminClientService {
                 .passwordHash(passwordEncoder.encode(request.password()))
                 .role(Role.CLIENT)
                 .status(UserStatus.ACTIVE)
+                .emailVerified(true)
+                .emailVerifiedAt(java.time.Instant.now())
                 .build());
 
         var region = serviceRegionService.validate(request.state(), request.zip());

@@ -53,6 +53,7 @@ com/okaynow/payroll/dto/UpdatePaymentStatusRequest.class
 com/okaynow/users/dto/ClientOptionResponse.class
 com/okaynow/notifications/dto/ShiftBoardUpdate.class
 com/okaynow/users/controller/FacilityController.class
+com/okaynow/marketplace/service/QualificationRulePackService$1.class
 com/okaynow/users/dto/CaregiverProfileResponse.class
 com/okaynow/shifts/dto/UpdatePlatformPaymentRequest.class
 com/okaynow/reviews/service/ReviewService.class
@@ -61,6 +62,7 @@ com/okaynow/common/exception/ResourceNotFoundException.class
 com/okaynow/notifications/domain/NotificationType.class
 com/okaynow/evv/domain/Visit$VisitBuilder.class
 com/okaynow/config/UploadResourceConfig.class
+com/okaynow/auth/service/AuthChallengeService$1.class
 com/okaynow/users/service/FacilityProfileService.class
 com/okaynow/common/geo/ServiceRegionController.class
 com/okaynow/staffing/dto/CreateClientCaregiverAssignmentRequest.class

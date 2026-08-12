@@ -15,8 +15,17 @@ spring:
         format_sql: true
   servlet:
     multipart:
-      max-file-size: 2MB
-      max-request-size: 2MB
+      max-file-size: 5MB
+      max-request-size: 5MB
+  mail:
+    host: ${SMTP_HOST:}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      mail.smtp.starttls.required: true
 
 server:
   port: 8080
@@ -33,9 +42,17 @@ app:
     # Local defaults; override via env in production and remove after first boot.
     email: ${ADMIN_BOOTSTRAP_EMAIL:admin@okaynow.com}
     password: ${ADMIN_BOOTSTRAP_PASSWORD:admin123}
+  mail:
+    from: ${APP_MAIL_FROM:OkayNow <mutwalibb@gmail.com>}
+    # When false (default), OTPs are logged by the server. Set true + spring.mail.* for SMTP.
+    smtp-enabled: ${APP_MAIL_SMTP_ENABLED:false}
+  auth:
+    otp-ttl-seconds: ${APP_AUTH_OTP_TTL_SECONDS:600}
+    otp-length: ${APP_AUTH_OTP_LENGTH:6}
+    max-attempts: ${APP_AUTH_OTP_MAX_ATTEMPTS:5}
   upload:
     dir: ${APP_UPLOAD_DIR:./uploads}
-    max-bytes: ${APP_UPLOAD_MAX_BYTES:2097152}
+    max-bytes: ${APP_UPLOAD_MAX_BYTES:5242880}
   service-region:
     # Comma-expand later (e.g. MA,RI). ZIP prefixes keep postal checks strict per state.
     # Quote ZIP3 values — unquoted 010 is parsed as a number and loses the leading zero.

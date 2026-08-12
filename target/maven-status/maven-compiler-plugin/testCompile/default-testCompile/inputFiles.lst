@@ -7,8 +7,12 @@
 /Users/bob/Developer/OkayNow/backend/src/test/java/com/okaynow/evv/VisitAttendanceControllerTest.java
 /Users/bob/Developer/OkayNow/backend/src/test/java/com/okaynow/evv/support/ShiftWindowsDurationTest.java
 /Users/bob/Developer/OkayNow/backend/src/test/java/com/okaynow/evv/support/ShiftWindowsOverlapTest.java
+/Users/bob/Developer/OkayNow/backend/src/test/java/com/okaynow/mail/CapturingEmailSender.java
+/Users/bob/Developer/OkayNow/backend/src/test/java/com/okaynow/marketplace/DriveTimeServiceTest.java
 /Users/bob/Developer/OkayNow/backend/src/test/java/com/okaynow/payroll/PayrollFinanceControllerTest.java
 /Users/bob/Developer/OkayNow/backend/src/test/java/com/okaynow/payroll/domain/AgencySettingsRateMathTest.java
 /Users/bob/Developer/OkayNow/backend/src/test/java/com/okaynow/shifts/ShiftControllerTest.java
 /Users/bob/Developer/OkayNow/backend/src/test/java/com/okaynow/staffing/ClientStaffingControllerTest.java
+/Users/bob/Developer/OkayNow/backend/src/test/java/com/okaynow/staffing/ContinuityScoreServiceTest.java
 /Users/bob/Developer/OkayNow/backend/src/test/java/com/okaynow/users/FacilityProfileControllerTest.java
+/Users/bob/Developer/OkayNow/backend/src/test/java/com/okaynow/users/support/LegalNameGuardTest.java

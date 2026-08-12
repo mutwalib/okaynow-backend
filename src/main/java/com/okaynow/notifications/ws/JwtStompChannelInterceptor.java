@@ -5,6 +5,7 @@ import com.okaynow.users.domain.UserStatus;
 import com.okaynow.users.repository.UserRepository;
 import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -23,6 +24,7 @@ import java.util.List;
  */
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class JwtStompChannelInterceptor implements ChannelInterceptor {
 
     private static final String BEARER_PREFIX = "Bearer ";
@@ -38,33 +40,59 @@ public class JwtStompChannelInterceptor implements ChannelInterceptor {
             return message;
         }
         if (StompCommand.CONNECT.equals(accessor.getCommand())) {
-            String header = firstHeader(accessor, "Authorization");
-            if (header == null) {
-                header = firstHeader(accessor, "authorization");
-            }
-            if (header == null || !header.startsWith(BEARER_PREFIX)) {
+            String token = extractToken(accessor);
+            if (token == null || token.isBlank()) {
+                log.warn("STOMP CONNECT rejected: missing token");
                 throw new IllegalArgumentException("Missing Authorization bearer token on STOMP CONNECT");
             }
-            String token = header.substring(BEARER_PREFIX.length());
             Claims claims = tokenProvider.parseClaimsOrNull(token);
             if (claims == null || !tokenProvider.isAccessToken(claims)) {
+                log.warn("STOMP CONNECT rejected: invalid access token");
                 throw new IllegalArgumentException("Invalid access token for WebSocket");
             }
             String email = claims.get("email", String.class);
             String role = claims.get(JwtTokenProvider.ROLE_CLAIM, String.class);
-            boolean active = userRepository.findByEmail(email)
+            if (email == null || email.isBlank() || role == null || role.isBlank()) {
+                log.warn("STOMP CONNECT rejected: token missing email/role claims");
+                throw new IllegalArgumentException("Invalid access token for WebSocket");
+            }
+            String normalizedEmail = email.toLowerCase().trim();
+            boolean active = userRepository.findByEmail(normalizedEmail)
                     .map(user -> user.getStatus() == UserStatus.ACTIVE
                             && user.getRole().name().equals(role))
                     .orElse(false);
             if (!active) {
+                log.warn("STOMP CONNECT rejected: user {} not active for role {}",
+                        normalizedEmail, role);
                 throw new IllegalArgumentException("User is not active for WebSocket");
             }
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(
-                            email, null, List.of(new SimpleGrantedAuthority("ROLE_" + role)));
+                            normalizedEmail, null, List.of(new SimpleGrantedAuthority("ROLE_" + role)));
             accessor.setUser(authentication);
+            log.debug("STOMP CONNECT accepted for {}", normalizedEmail);
         }
         return message;
+    }
+
+    private static String extractToken(StompHeaderAccessor accessor) {
+        String header = firstHeader(accessor, "Authorization");
+        if (header == null) {
+            header = firstHeader(accessor, "authorization");
+        }
+        if (header != null && header.startsWith(BEARER_PREFIX)) {
+            return header.substring(BEARER_PREFIX.length()).trim();
+        }
+        // React Native / some STOMP clients send the JWT as passcode.
+        String passcode = firstHeader(accessor, "passcode");
+        if (passcode != null && !passcode.isBlank()) {
+            return passcode.trim();
+        }
+        String token = firstHeader(accessor, "token");
+        if (token != null && !token.isBlank()) {
+            return token.trim();
+        }
+        return null;
     }
 
     private static String firstHeader(StompHeaderAccessor accessor, String name) {

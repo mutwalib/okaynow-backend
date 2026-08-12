@@ -30,8 +30,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         String[] origins = allowedOrigins.split(",");
+        // Native mobile WebSocket clients often send localhost / null / custom Origins.
+        // Patterns keep browser CORS tight via CorsConfig while allowing RN handshakes.
         registry.addEndpoint("/ws")
-                .setAllowedOrigins(origins);
+                .setAllowedOriginPatterns("*");
         registry.addEndpoint("/ws")
                 .setAllowedOrigins(origins)
                 .withSockJS();

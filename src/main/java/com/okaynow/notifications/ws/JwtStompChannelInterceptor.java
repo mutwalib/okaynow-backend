@@ -47,7 +47,10 @@ public class JwtStompChannelInterceptor implements ChannelInterceptor {
             }
             Claims claims = tokenProvider.parseClaimsOrNull(token);
             if (claims == null || !tokenProvider.isAccessToken(claims)) {
-                log.warn("STOMP CONNECT rejected: invalid access token");
+                log.warn(
+                        "STOMP CONNECT rejected: invalid access token (len={}, reason={})",
+                        token.length(),
+                        tokenProvider.describeParseFailure(token));
                 throw new IllegalArgumentException("Invalid access token for WebSocket");
             }
             String email = claims.get("email", String.class);

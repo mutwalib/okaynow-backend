@@ -2,7 +2,6 @@ package com.okaynow.config;
 
 import com.okaynow.notifications.ws.JwtStompChannelInterceptor;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
@@ -17,9 +16,6 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final JwtStompChannelInterceptor jwtStompChannelInterceptor;
 
-    @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:3001}")
-    private String allowedOrigins;
-
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
         registry.enableSimpleBroker("/topic", "/queue");
@@ -29,14 +25,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        String[] origins = allowedOrigins.split(",");
-        // Native mobile WebSocket clients often send localhost / null / custom Origins.
-        // Patterns keep browser CORS tight via CorsConfig while allowing RN handshakes.
-        registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*");
-        registry.addEndpoint("/ws")
-                .setAllowedOrigins(origins)
-                .withSockJS();
+        // Single raw WS endpoint. Origin patterns "*" so React Native (often no/odd Origin)
+        // and web apps can handshake; JWT is still required on STOMP CONNECT.
+        registry.addEndpoint("/ws").setAllowedOriginPatterns("*");
     }
 
     @Override

@@ -86,6 +86,19 @@ public class JwtTokenProvider {
         }
     }
 
+    /** Diagnostic helper for WS auth failures. */
+    public String describeParseFailure(String token) {
+        try {
+            Claims claims = parseClaims(token);
+            if (!isAccessToken(claims)) {
+                return "not-access-token type=" + claims.get(TOKEN_TYPE_CLAIM, String.class);
+            }
+            return "ok";
+        } catch (JwtException | IllegalArgumentException e) {
+            return e.getClass().getSimpleName() + ": " + e.getMessage();
+        }
+    }
+
     public long getAccessTokenValiditySeconds() {
         return accessTokenValiditySeconds;
     }

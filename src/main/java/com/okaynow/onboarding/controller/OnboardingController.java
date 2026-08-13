@@ -35,6 +35,12 @@ public class OnboardingController {
                 userService.getByEmail(authentication.getName())));
     }
 
+    @PostMapping("/me/submit")
+    public ResponseEntity<OnboardingStatusResponse> submitApplication(Authentication authentication) {
+        return ResponseEntity.ok(onboardingService.submitApplication(
+                userService.getByEmail(authentication.getName())));
+    }
+
     @PostMapping("/me/requests/{requestId}/text")
     public ResponseEntity<OnboardingRequestResponse> submitText(
             @PathVariable UUID requestId,

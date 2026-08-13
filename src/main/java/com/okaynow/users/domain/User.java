@@ -58,6 +58,9 @@ public class User {
 
     private Instant emailVerifiedAt;
 
+    /** Set when the applicant confirms their onboarding packet is ready for agency review. */
+    private Instant applicationSubmittedAt;
+
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private Instant createdAt;

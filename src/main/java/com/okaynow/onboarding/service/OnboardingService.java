@@ -83,17 +83,49 @@ public class OnboardingService {
                 .map(this::toResponse)
                 .toList();
         List<String> missing = applicationMissing(user, requests);
-        boolean applicationComplete = missing.isEmpty();
+        boolean applicationReady = missing.isEmpty();
+        boolean applicationSubmitted = user.getApplicationSubmittedAt() != null;
+        boolean applicationComplete = applicationSubmitted;
         String message;
         if (!pending) {
             message = "Your account is active.";
-        } else if (applicationComplete) {
+        } else if (applicationSubmitted) {
             message = "Thanks for registering on OkayNow. Our team is reviewing your application and will notify you once you are verified. If we need anything else, it will appear below.";
+        } else if (applicationReady) {
+            message = "Everything looks ready. Confirm and submit your application so our team can begin review.";
         } else {
-            message = "Finish the steps below to complete your OkayNow application. Once everything is submitted, our team will review it and notify you.";
+            message = "Finish the steps below to complete your OkayNow application. Once everything is entered, you can submit it for review.";
         }
         return new OnboardingStatusResponse(
-                user.getStatus(), pending, applicationComplete, missing, message, requests);
+                user.getStatus(),
+                pending,
+                applicationReady,
+                applicationSubmitted,
+                applicationComplete,
+                missing,
+                message,
+                requests);
+    }
+
+    @Transactional
+    public OnboardingStatusResponse submitApplication(User actor) {
+        if (actor.getStatus() != UserStatus.PENDING_REVIEW) {
+            throw new BadRequestException("Only accounts pending review can submit an application");
+        }
+        List<OnboardingRequestResponse> requests = requestRepository
+                .findByUserIdOrderByCreatedAtAsc(actor.getId())
+                .stream()
+                .map(this::toResponse)
+                .toList();
+        List<String> missing = applicationMissing(actor, requests);
+        if (!missing.isEmpty()) {
+            throw new BadRequestException(
+                    "Finish these items before submitting: " + String.join("; ", missing));
+        }
+        actor.setApplicationSubmittedAt(Instant.now());
+        userRepository.save(actor);
+        auditLogService.record(actor, AuditAction.APPLICATION_SUBMITTED, "USER", actor.getId(), null, null);
+        return statusFor(actor);
     }
 
     private List<String> applicationMissing(User user, List<OnboardingRequestResponse> requests) {
@@ -151,6 +183,7 @@ public class OnboardingService {
         if (target.getStatus() == UserStatus.ACTIVE) {
             target.setStatus(UserStatus.PENDING_REVIEW);
         }
+        target.setApplicationSubmittedAt(null);
         if (body.fieldType() == OnboardingFieldType.PROFILE_PHOTO && target.getRole() != Role.CAREGIVER) {
             throw new BadRequestException("Profile photo requests are for caregiver accounts only");
         }
@@ -233,6 +266,7 @@ public class OnboardingService {
             req.setResolvedAt(Instant.now());
         }
         target.setStatus(UserStatus.ACTIVE);
+        target.setApplicationSubmittedAt(null);
         auditLogService.record(admin, AuditAction.ACCOUNT_REVIEW_APPROVED, "USER", target.getId(), null, null);
         notificationService.notifyUser(
                 target,

@@ -4,6 +4,7 @@
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/admin/controller/AdminUserController.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/admin/dto/AdminClientResponse.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/admin/dto/AdminUserResponse.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/admin/dto/AdminUserReviewDetailResponse.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/admin/dto/ClientType.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/admin/dto/CreateAdminRequest.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/admin/dto/CreateClientRequest.java

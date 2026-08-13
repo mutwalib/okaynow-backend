@@ -1,6 +1,7 @@
 package com.okaynow.admin.controller;
 
 import com.okaynow.admin.dto.AdminUserResponse;
+import com.okaynow.admin.dto.AdminUserReviewDetailResponse;
 import com.okaynow.admin.dto.CreateAdminRequest;
 import com.okaynow.admin.dto.UpdateUserStatusRequest;
 import com.okaynow.admin.service.AdminUserService;
@@ -47,6 +48,11 @@ public class AdminUserController {
                 search,
                 PageRequest.of(page, Math.min(size, 100),
                         Sort.by(Sort.Direction.DESC, "createdAt"))));
+    }
+
+    @GetMapping("/{id}/review")
+    public ResponseEntity<AdminUserReviewDetailResponse> reviewDetail(@PathVariable UUID id) {
+        return ResponseEntity.ok(adminUserService.reviewDetail(id));
     }
 
     @PatchMapping("/{id}/status")

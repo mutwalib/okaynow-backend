@@ -28,11 +28,17 @@ public class PostgresEnumCheckConstraintConfig implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         sync("audit_logs", "action", "audit_logs_action_check", AuditAction.class);
+        sync("users", "status", "users_status_check",
+                com.okaynow.users.domain.UserStatus.class);
         sync("shifts", "status", "shifts_status_check", ShiftStatus.class);
         sync("shifts", "schedule_type", "shifts_schedule_type_check", ShiftScheduleType.class);
         sync("visits", "method", "visits_method_check", ClockMethod.class);
         sync("notifications", "type", "notifications_type_check",
                 com.okaynow.notifications.domain.NotificationType.class);
+        sync("onboarding_requests", "field_type", "onboarding_requests_field_type_check",
+                com.okaynow.onboarding.domain.OnboardingFieldType.class);
+        sync("onboarding_requests", "status", "onboarding_requests_status_check",
+                com.okaynow.onboarding.domain.OnboardingRequestStatus.class);
         sync("client_invoices", "status", "client_invoices_status_check",
                 com.okaynow.payroll.domain.InvoiceStatus.class);
         sync("shift_claims", "source", "shift_claims_source_check",

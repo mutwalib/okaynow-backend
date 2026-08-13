@@ -42,11 +42,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (claims != null && tokenProvider.isAccessToken(claims)) {
                 String email = claims.get("email", String.class);
                 String role = claims.get(JwtTokenProvider.ROLE_CLAIM, String.class);
-                boolean active = userRepository.findByEmail(email)
-                        .map(user -> user.getStatus() == UserStatus.ACTIVE
+                boolean allowed = userRepository.findByEmail(email)
+                        .map(user -> isAllowedStatus(user.getStatus())
                                 && user.getRole().name().equals(role))
                         .orElse(false);
-                if (active) {
+                if (allowed) {
                     UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                             email, null, List.of(new SimpleGrantedAuthority("ROLE_" + role)));
                     authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
@@ -55,5 +55,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
         }
         filterChain.doFilter(request, response);
+    }
+
+    private static boolean isAllowedStatus(UserStatus status) {
+        return status == UserStatus.ACTIVE || status == UserStatus.PENDING_REVIEW;
     }
 }

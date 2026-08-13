@@ -1,6 +1,7 @@
 package com.okaynow.auth.dto;
 
 import com.okaynow.users.domain.Role;
+import com.okaynow.users.domain.UserStatus;
 
 import java.util.UUID;
 
@@ -16,14 +17,15 @@ public record LoginResult(
         String tokenType,
         Long expiresInSeconds,
         UUID userId,
-        Role role
+        Role role,
+        UserStatus status
 ) {
     public static LoginResult otpRequired(String email) {
         return new LoginResult(
                 true,
                 email,
                 "Enter the one-time code we emailed you to finish signing in.",
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null);
     }
 
     public static LoginResult tokens(AuthResponse auth) {
@@ -36,6 +38,7 @@ public record LoginResult(
                 auth.tokenType(),
                 auth.expiresInSeconds(),
                 auth.userId(),
-                auth.role());
+                auth.role(),
+                auth.status());
     }
 }

@@ -2,6 +2,7 @@ package com.okaynow.auth;
 
 import com.okaynow.auth.domain.AuthChallengePurpose;
 import com.okaynow.auth.dto.AuthResponse;
+import com.okaynow.auth.dto.ChangePasswordRequest;
 import com.okaynow.auth.dto.EmailOnlyRequest;
 import com.okaynow.auth.dto.LoginRequest;
 import com.okaynow.auth.dto.LoginResult;
@@ -17,6 +18,7 @@ import com.okaynow.common.exception.BadRequestException;
 import com.okaynow.common.geo.ServiceRegionService;
 import com.okaynow.legal.dto.AcceptLegalDocumentsRequest;
 import com.okaynow.legal.service.LegalDocumentService;
+import com.okaynow.onboarding.service.OnboardingService;
 import com.okaynow.users.domain.CareRecipientRelationship;
 import com.okaynow.users.domain.CaregiverProfile;
 import com.okaynow.users.domain.ClientProfile;
@@ -52,6 +54,7 @@ public class AuthService {
     private final ServiceRegionService serviceRegionService;
     private final LegalDocumentService legalDocumentService;
     private final AuthChallengeService challengeService;
+    private final OnboardingService onboardingService;
 
     @Transactional
     public RegisterResult register(RegisterRequest request) {
@@ -150,17 +153,18 @@ public class AuthService {
         if (user.getRole() == Role.ADMIN) {
             throw new BadRequestException("Agency accounts use the login OTP flow");
         }
-        if (user.isEmailVerified() && user.getStatus() == UserStatus.ACTIVE) {
+        if (user.isEmailVerified()
+                && (user.getStatus() == UserStatus.ACTIVE
+                || user.getStatus() == UserStatus.PENDING_REVIEW)) {
             return issueTokens(user);
         }
         if (user.getStatus() == UserStatus.SUSPENDED || user.getStatus() == UserStatus.DEACTIVATED) {
             throw new BadRequestException("Account is not active");
         }
         challengeService.verifyOrThrow(user, AuthChallengePurpose.SIGNUP_VERIFY, request.code());
-        user.setEmailVerified(true);
-        user.setEmailVerifiedAt(Instant.now());
-        user.setStatus(UserStatus.ACTIVE);
+        markEmailVerifiedAndEnterPostVerifyStatus(user);
         userRepository.save(user);
+        onboardingService.ensureSystemRequestsAfterEmailVerify(user);
         return issueTokens(user);
     }
 
@@ -203,7 +207,7 @@ public class AuthService {
             return LoginResult.otpRequired(user.getEmail());
         }
 
-        if (user.getStatus() != UserStatus.ACTIVE) {
+        if (user.getStatus() != UserStatus.ACTIVE && user.getStatus() != UserStatus.PENDING_REVIEW) {
             throw new BadCredentialsException("Account is not active");
         }
         return LoginResult.tokens(issueTokens(user));
@@ -262,14 +266,24 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
         // Completing reset also confirms email ownership.
         if (!user.isEmailVerified()) {
-            user.setEmailVerified(true);
-            user.setEmailVerifiedAt(Instant.now());
-            if (user.getStatus() == UserStatus.PENDING_VERIFICATION) {
-                user.setStatus(UserStatus.ACTIVE);
-            }
+            markEmailVerifiedAndEnterPostVerifyStatus(user);
+            onboardingService.ensureSystemRequestsAfterEmailVerify(user);
         }
         userRepository.save(user);
         return new MessageResponse("Password updated. You can sign in with your new password.");
+    }
+
+    @Transactional
+    public MessageResponse changePassword(User actor, ChangePasswordRequest request) {
+        if (!passwordEncoder.matches(request.currentPassword(), actor.getPasswordHash())) {
+            throw new BadRequestException("Current password is incorrect");
+        }
+        if (passwordEncoder.matches(request.newPassword(), actor.getPasswordHash())) {
+            throw new BadRequestException("New password must be different from your current password");
+        }
+        actor.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(actor);
+        return new MessageResponse("Password updated");
     }
 
     @Transactional(readOnly = true)
@@ -281,10 +295,22 @@ public class AuthService {
         UUID userId = UUID.fromString(claims.getSubject());
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BadCredentialsException("Invalid refresh token"));
-        if (user.getStatus() != UserStatus.ACTIVE || !user.isEmailVerified()) {
+        if (!user.isEmailVerified()
+                || (user.getStatus() != UserStatus.ACTIVE
+                && user.getStatus() != UserStatus.PENDING_REVIEW)) {
             throw new BadCredentialsException("Account is not active");
         }
         return issueTokens(user);
+    }
+
+    private void markEmailVerifiedAndEnterPostVerifyStatus(User user) {
+        user.setEmailVerified(true);
+        user.setEmailVerifiedAt(Instant.now());
+        if (user.getRole() == Role.CAREGIVER || user.getRole() == Role.CLIENT) {
+            user.setStatus(UserStatus.PENDING_REVIEW);
+        } else {
+            user.setStatus(UserStatus.ACTIVE);
+        }
     }
 
     private User requireUserByEmail(String email) {
@@ -304,6 +330,6 @@ public class AuthService {
         String access = tokenProvider.createAccessToken(user.getId(), user.getEmail(), user.getRole().name());
         String refresh = tokenProvider.createRefreshToken(user.getId(), user.getEmail(), user.getRole().name());
         return AuthResponse.bearer(access, refresh, tokenProvider.getAccessTokenValiditySeconds(),
-                user.getId(), user.getEmail(), user.getRole());
+                user.getId(), user.getEmail(), user.getRole(), user.getStatus());
     }
 }

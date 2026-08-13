@@ -5,6 +5,7 @@ import com.okaynow.admin.dto.CreateAdminRequest;
 import com.okaynow.common.dto.PagedResponse;
 import com.okaynow.common.exception.BadRequestException;
 import com.okaynow.common.exception.ResourceNotFoundException;
+import com.okaynow.onboarding.service.OnboardingService;
 import com.okaynow.users.domain.Role;
 import com.okaynow.users.domain.User;
 import com.okaynow.users.domain.UserStatus;
@@ -23,6 +24,7 @@ public class AdminUserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final OnboardingService onboardingService;
 
     @Transactional(readOnly = true)
     public PagedResponse<AdminUserResponse> search(
@@ -41,6 +43,14 @@ public class AdminUserService {
         if (user.getEmail().equalsIgnoreCase(actingAdminEmail)
                 && status != UserStatus.ACTIVE) {
             throw new BadRequestException("Platform owners cannot suspend or deactivate themselves");
+        }
+        if (status == UserStatus.ACTIVE
+                && (user.getRole() == Role.CAREGIVER || user.getRole() == Role.CLIENT)
+                && user.getStatus() == UserStatus.PENDING_REVIEW) {
+            User admin = userRepository.findByEmail(actingAdminEmail.toLowerCase().trim())
+                    .orElseThrow(() -> new ResourceNotFoundException("Admin user not found"));
+            onboardingService.approveReview(userId, admin);
+            return toResponse(userRepository.findById(userId).orElseThrow());
         }
         user.setStatus(status);
         return toResponse(user);

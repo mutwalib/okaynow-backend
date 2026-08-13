@@ -1,6 +1,7 @@
 package com.okaynow.auth;
 
 import com.okaynow.auth.dto.AuthResponse;
+import com.okaynow.auth.dto.ChangePasswordRequest;
 import com.okaynow.auth.dto.EmailOnlyRequest;
 import com.okaynow.auth.dto.LoginRequest;
 import com.okaynow.auth.dto.LoginResult;
@@ -11,10 +12,12 @@ import com.okaynow.auth.dto.RegisterResult;
 import com.okaynow.auth.dto.ResetPasswordRequest;
 import com.okaynow.auth.dto.VerifyEmailRequest;
 import com.okaynow.auth.dto.VerifyLoginOtpRequest;
+import com.okaynow.users.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final UserService userService;
 
     @PostMapping("/register")
     public ResponseEntity<RegisterResult> register(@Valid @RequestBody RegisterRequest request) {
@@ -70,6 +74,14 @@ public class AuthController {
     public ResponseEntity<MessageResponse> resetPassword(
             @Valid @RequestBody ResetPasswordRequest request) {
         return ResponseEntity.ok(authService.resetPassword(request));
+    }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<MessageResponse> changePassword(
+            @Valid @RequestBody ChangePasswordRequest request,
+            Authentication authentication) {
+        return ResponseEntity.ok(authService.changePassword(
+                userService.getByEmail(authentication.getName()), request));
     }
 
     @PostMapping("/refresh")

@@ -299,11 +299,39 @@ public class OnboardingService {
     private OnboardingRequest requireOwnOpen(User actor, UUID requestId) {
         OnboardingRequest req = requestRepository.findByIdAndUserId(requestId, actor.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Onboarding request not found"));
-        if (req.getStatus() != OnboardingRequestStatus.OPEN
-                && req.getStatus() != OnboardingRequestStatus.SUBMITTED) {
-            throw new BadRequestException("This request is no longer open");
+        if (req.getStatus() != OnboardingRequestStatus.OPEN) {
+            throw new BadRequestException(
+                    "This item is locked after submission. Wait for the agency if a resubmission is needed.");
         }
         return req;
+    }
+
+    @Transactional
+    public OnboardingRequestResponse requestResubmit(UUID requestId, User admin) {
+        OnboardingRequest req = requestRepository.findById(requestId)
+                .orElseThrow(() -> new ResourceNotFoundException("Onboarding request not found"));
+        if (req.getStatus() != OnboardingRequestStatus.SUBMITTED
+                && req.getStatus() != OnboardingRequestStatus.ACCEPTED) {
+            throw new BadRequestException("Only submitted or accepted items can be reopened for resubmission");
+        }
+        User target = userRepository.findById(req.getUserId())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        if (target.getStatus() == UserStatus.ACTIVE) {
+            target.setStatus(UserStatus.PENDING_REVIEW);
+        }
+        target.setApplicationSubmittedAt(null);
+        req.setStatus(OnboardingRequestStatus.OPEN);
+        req.setResolvedAt(null);
+        // Keep prior response/file visible until the applicant replaces them.
+        auditLogService.record(admin, AuditAction.ONBOARDING_RESUBMIT_REQUESTED, "USER", target.getId(), null,
+                "requestId=" + req.getId() + " type=" + req.getFieldType());
+        notificationService.notifyUser(
+                target,
+                NotificationType.ONBOARDING_INFO_REQUESTED,
+                "Please resubmit: " + req.getTitle(),
+                "The agency asked you to update this item. Open your application to resubmit.",
+                null);
+        return toResponse(req);
     }
 
     private OnboardingRequestResponse toResponse(OnboardingRequest req) {

@@ -60,4 +60,12 @@ public class AdminOnboardingController {
         return ResponseEntity.ok(onboardingService.cancelRequest(
                 requestId, userService.getByEmail(authentication.getName())));
     }
+
+    @PostMapping("/onboarding-requests/{requestId}/request-resubmit")
+    public ResponseEntity<OnboardingRequestResponse> requestResubmit(
+            @PathVariable UUID requestId,
+            Authentication authentication) {
+        return ResponseEntity.ok(onboardingService.requestResubmit(
+                requestId, userService.getByEmail(authentication.getName())));
+    }
 }

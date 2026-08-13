@@ -88,6 +88,10 @@ public class ClientProfileService {
             throw new BadRequestException(
                     "Your profile is locked after verification. You can change your password from account settings.");
         }
+        if (user.getApplicationSubmittedAt() != null) {
+            throw new BadRequestException(
+                    "Your application is locked after submission. If the agency asks you to update something, it will reopen below.");
+        }
     }
 
     private ClientProfile findByUserId(UUID userId) {

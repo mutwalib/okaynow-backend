@@ -67,6 +67,7 @@
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/common/exception/GlobalExceptionHandler.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/common/exception/ResourceNotFoundException.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/common/geo/GeoUtils.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/common/geo/GeocodingService.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/common/geo/ServiceRegionController.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/common/geo/ServiceRegionService.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/config/AdminBootstrapConfig.java

@@ -70,6 +70,10 @@ public class AdminUserService {
                         profile.getHourlyRateMin(),
                         profile.getHourlyRateMax(),
                         profile.getServiceRadiusMiles(),
+                        profile.getHomeAddressLine(),
+                        profile.getHomeCity(),
+                        profile.getHomeState(),
+                        profile.getHomeZip(),
                         profile.getHomeLat(),
                         profile.getHomeLng(),
                         profile.getProfilePhotoUrl());

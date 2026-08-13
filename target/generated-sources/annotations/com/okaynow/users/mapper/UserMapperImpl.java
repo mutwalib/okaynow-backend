@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
 
 @Generated(
     value = "org.mapstruct.ap.MappingProcessor",
-    date = "2026-08-13T12:53:42-0400",
+    date = "2026-08-13T13:12:31-0400",
     comments = "version: 1.5.5.Final, compiler: javac, environment: Java 26.0.1 (Eclipse Adoptium)"
 )
 @Component
@@ -66,6 +66,10 @@ public class UserMapperImpl implements UserMapper {
         BigDecimal hourlyRateMin = null;
         BigDecimal hourlyRateMax = null;
         Integer serviceRadiusMiles = null;
+        String homeAddressLine = null;
+        String homeCity = null;
+        String homeState = null;
+        String homeZip = null;
         Double homeLat = null;
         Double homeLng = null;
         String profilePhotoUrl = null;
@@ -83,13 +87,17 @@ public class UserMapperImpl implements UserMapper {
         hourlyRateMin = profile.getHourlyRateMin();
         hourlyRateMax = profile.getHourlyRateMax();
         serviceRadiusMiles = profile.getServiceRadiusMiles();
+        homeAddressLine = profile.getHomeAddressLine();
+        homeCity = profile.getHomeCity();
+        homeState = profile.getHomeState();
+        homeZip = profile.getHomeZip();
         homeLat = profile.getHomeLat();
         homeLng = profile.getHomeLng();
         profilePhotoUrl = profile.getProfilePhotoUrl();
         ratingAvg = profile.getRatingAvg();
         ratingCount = profile.getRatingCount();
 
-        CaregiverProfileResponse caregiverProfileResponse = new CaregiverProfileResponse( id, userId, firstName, lastName, qualifications, hourlyRateMin, hourlyRateMax, serviceRadiusMiles, homeLat, homeLng, profilePhotoUrl, ratingAvg, ratingCount );
+        CaregiverProfileResponse caregiverProfileResponse = new CaregiverProfileResponse( id, userId, firstName, lastName, qualifications, hourlyRateMin, hourlyRateMax, serviceRadiusMiles, homeAddressLine, homeCity, homeState, homeZip, homeLat, homeLng, profilePhotoUrl, ratingAvg, ratingCount );
 
         return caregiverProfileResponse;
     }

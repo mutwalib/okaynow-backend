@@ -15,10 +15,12 @@ import com.okaynow.onboarding.dto.OnboardingStatusResponse;
 import com.okaynow.onboarding.repository.OnboardingRequestRepository;
 import com.okaynow.storage.LocalFileStorageService;
 import com.okaynow.users.domain.CaregiverProfile;
+import com.okaynow.users.domain.ClientProfile;
 import com.okaynow.users.domain.Role;
 import com.okaynow.users.domain.User;
 import com.okaynow.users.domain.UserStatus;
 import com.okaynow.users.repository.CaregiverProfileRepository;
+import com.okaynow.users.repository.ClientProfileRepository;
 import com.okaynow.users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -26,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
@@ -40,6 +43,7 @@ public class OnboardingService {
     private final OnboardingRequestRepository requestRepository;
     private final UserRepository userRepository;
     private final CaregiverProfileRepository caregiverProfileRepository;
+    private final ClientProfileRepository clientProfileRepository;
     private final LocalFileStorageService fileStorageService;
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
@@ -78,10 +82,60 @@ public class OnboardingService {
                 .stream()
                 .map(this::toResponse)
                 .toList();
-        String message = pending
-                ? "Thanks for registering on OkayNow. Our team is reviewing your application and will notify you once you are verified. If we need anything else, it will appear below."
-                : "Your account is active.";
-        return new OnboardingStatusResponse(user.getStatus(), pending, message, requests);
+        List<String> missing = applicationMissing(user, requests);
+        boolean applicationComplete = missing.isEmpty();
+        String message;
+        if (!pending) {
+            message = "Your account is active.";
+        } else if (applicationComplete) {
+            message = "Thanks for registering on OkayNow. Our team is reviewing your application and will notify you once you are verified. If we need anything else, it will appear below.";
+        } else {
+            message = "Finish the steps below to complete your OkayNow application. Once everything is submitted, our team will review it and notify you.";
+        }
+        return new OnboardingStatusResponse(
+                user.getStatus(), pending, applicationComplete, missing, message, requests);
+    }
+
+    private List<String> applicationMissing(User user, List<OnboardingRequestResponse> requests) {
+        List<String> missing = new ArrayList<>();
+        if (user.getRole() == Role.CAREGIVER) {
+            CaregiverProfile profile = caregiverProfileRepository.findByUserId(user.getId()).orElse(null);
+            if (profile == null
+                    || profile.getQualifications() == null
+                    || profile.getQualifications().isEmpty()) {
+                missing.add("Add at least one qualification");
+            }
+            if (profile == null
+                    || isBlank(profile.getHomeAddressLine())
+                    || isBlank(profile.getHomeCity())
+                    || isBlank(profile.getHomeZip())
+                    || profile.getHomeLat() == null
+                    || profile.getHomeLng() == null) {
+                missing.add("Add your home address");
+            }
+            boolean hasPhoto = profile != null
+                    && profile.getProfilePhotoUrl() != null
+                    && !profile.getProfilePhotoUrl().isBlank();
+            if (!hasPhoto) {
+                missing.add("Upload a profile photo");
+            }
+        } else if (user.getRole() == Role.CLIENT) {
+            ClientProfile profile = clientProfileRepository.findByUserId(user.getId()).orElse(null);
+            if (profile == null
+                    || isBlank(profile.getAddressLine())
+                    || isBlank(profile.getCity())
+                    || isBlank(profile.getZip())) {
+                missing.add("Add the care address");
+            }
+        }
+        if (requests.stream().anyMatch(r -> r.status() == OnboardingRequestStatus.OPEN)) {
+            missing.add("Submit the information requested below");
+        }
+        return missing;
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     @Transactional

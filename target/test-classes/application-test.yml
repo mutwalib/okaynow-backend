@@ -16,3 +16,6 @@ app:
     refresh-token-validity-seconds: 1209600
   cors:
     allowed-origins: http://localhost:3000
+  bootstrap-admin:
+    email: admin@okaynow.com
+    password: admin123

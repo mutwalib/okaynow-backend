@@ -47,6 +47,32 @@ public class AdminBootstrapConfig implements ApplicationRunner {
         String normalizedEmail = email.trim().toLowerCase();
         String hash = passwordEncoder.encode(password);
 
+        // If the configured owner email is new, rename a prior bootstrap admin account.
+        if (userRepository.findByEmail(normalizedEmail).isEmpty()) {
+            for (String legacy : new String[]{"admin@okaynowcare.com", "admin@okaynow.com"}) {
+                if (legacy.equals(normalizedEmail)) {
+                    continue;
+                }
+                var legacyAdmin = userRepository.findByEmail(legacy);
+                if (legacyAdmin.isPresent() && legacyAdmin.get().getRole() == Role.ADMIN) {
+                    User renamed = legacyAdmin.get();
+                    renamed.setEmail(normalizedEmail);
+                    renamed.setPasswordHash(hash);
+                    renamed.setStatus(UserStatus.ACTIVE);
+                    renamed.setEmailVerified(true);
+                    if (renamed.getEmailVerifiedAt() == null) {
+                        renamed.setEmailVerifiedAt(java.time.Instant.now());
+                    }
+                    userRepository.save(renamed);
+                    log.warn(
+                            "Renamed platform owner {} → {}. Remove bootstrap credentials from the environment in production.",
+                            legacy,
+                            normalizedEmail);
+                    return;
+                }
+            }
+        }
+
         userRepository.findByEmail(normalizedEmail).ifPresentOrElse(existing -> {
             existing.setPasswordHash(hash);
             existing.setRole(Role.ADMIN);

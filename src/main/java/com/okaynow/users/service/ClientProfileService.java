@@ -3,12 +3,13 @@ package com.okaynow.users.service;
 import com.okaynow.common.exception.BadRequestException;
 import com.okaynow.common.exception.ResourceNotFoundException;
 import com.okaynow.common.geo.ServiceRegionService;
-import com.okaynow.storage.LocalFileStorageService;
 import com.okaynow.users.domain.ClientProfile;
+import com.okaynow.users.domain.UserStatus;
 import com.okaynow.users.dto.ClientProfileResponse;
 import com.okaynow.users.dto.UpdateClientProfileRequest;
 import com.okaynow.users.mapper.UserMapper;
 import com.okaynow.users.repository.ClientProfileRepository;
+import com.okaynow.users.repository.UserRepository;
 import com.okaynow.users.support.LegalNameGuard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -22,9 +23,9 @@ import java.util.UUID;
 public class ClientProfileService {
 
     private final ClientProfileRepository clientProfileRepository;
+    private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final ServiceRegionService serviceRegionService;
-    private final LocalFileStorageService fileStorageService;
 
     @Transactional(readOnly = true)
     public ClientProfileResponse getByUserId(UUID userId) {
@@ -33,6 +34,7 @@ public class ClientProfileService {
 
     @Transactional
     public ClientProfileResponse update(UUID userId, UpdateClientProfileRequest request) {
+        assertProfileEditable(userId);
         ClientProfile profile = findByUserId(userId);
         LegalNameGuard.assertUnchanged(
                 profile.getFirstName(), profile.getLastName(),
@@ -59,9 +61,17 @@ public class ClientProfileService {
 
     @Transactional
     public ClientProfileResponse uploadPhoto(UUID userId, MultipartFile file) {
-        ClientProfile profile = findByUserId(userId);
-        profile.setProfilePhotoUrl(fileStorageService.storeProfilePhoto(profile.getId(), file));
-        return userMapper.toClientProfileResponse(profile);
+        throw new BadRequestException(
+                "Client profile photos are not collected. Contact the agency if a document is required.");
+    }
+
+    private void assertProfileEditable(UUID userId) {
+        var user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        if (user.getStatus() == UserStatus.ACTIVE) {
+            throw new BadRequestException(
+                    "Your profile is locked after verification. You can change your password from account settings.");
+        }
     }
 
     private ClientProfile findByUserId(UUID userId) {

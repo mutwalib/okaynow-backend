@@ -27,6 +27,7 @@
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/auth/domain/AuthChallenge.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/auth/domain/AuthChallengePurpose.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/auth/dto/AuthResponse.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/auth/dto/ChangePasswordRequest.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/auth/dto/EmailOnlyRequest.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/auth/dto/LoginRequest.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/auth/dto/LoginResult.java
@@ -75,6 +76,7 @@
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/config/JpaConfig.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/config/MarketplacePostedBackfill.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/config/OpenApiConfig.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/config/PendingReviewAccessFilter.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/config/PostgresEnumCheckConstraintConfig.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/config/SecurityConfig.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/config/ServiceRegionProperties.java
@@ -139,6 +141,17 @@
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/notifications/service/NotificationService.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/notifications/service/ShiftEventPublisher.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/notifications/ws/JwtStompChannelInterceptor.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/onboarding/controller/AdminOnboardingController.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/onboarding/controller/OnboardingController.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/onboarding/domain/OnboardingFieldType.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/onboarding/domain/OnboardingRequest.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/onboarding/domain/OnboardingRequestStatus.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/onboarding/dto/CreateOnboardingRequest.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/onboarding/dto/OnboardingRequestResponse.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/onboarding/dto/OnboardingStatusResponse.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/onboarding/dto/SubmitOnboardingTextRequest.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/onboarding/repository/OnboardingRequestRepository.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/onboarding/service/OnboardingService.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/payroll/controller/AdminAgencySettingsController.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/payroll/controller/AdminFinanceController.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/payroll/controller/AdminInvoiceController.java

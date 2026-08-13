@@ -59,6 +59,44 @@ public class LocalFileStorageService {
         return "/uploads/profiles/" + filename;
     }
 
+    /** Stores an onboarding document (image or PDF) and returns a public relative URL. */
+    public String storeOnboardingDocument(UUID ownerId, MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BadRequestException("Choose a file to upload");
+        }
+        if (file.getSize() > maxBytes) {
+            throw new BadRequestException(
+                    "File must be " + (maxBytes / (1024 * 1024)) + " MB or smaller");
+        }
+        String contentType = resolveContentType(file);
+        String name = file.getOriginalFilename() == null
+                ? ""
+                : file.getOriginalFilename().toLowerCase(Locale.US);
+        boolean pdf = "application/pdf".equals(contentType) || name.endsWith(".pdf");
+        boolean image = ALLOWED.contains(contentType);
+        if (!pdf && !image) {
+            throw new BadRequestException("Upload a JPEG, PNG, WebP, or PDF file");
+        }
+        try {
+            Files.createDirectories(root.resolve("onboarding"));
+        } catch (IOException e) {
+            throw new BadRequestException("Could not save file");
+        }
+        String ext = pdf ? "pdf" : switch (contentType) {
+            case "image/png" -> "png";
+            case "image/webp" -> "webp";
+            default -> "jpg";
+        };
+        String filename = ownerId + "-" + UUID.randomUUID() + "." + ext;
+        Path dest = root.resolve("onboarding").resolve(filename);
+        try {
+            Files.copy(file.getInputStream(), dest, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            throw new BadRequestException("Could not save file");
+        }
+        return "/uploads/onboarding/" + filename;
+    }
+
     private static String resolveContentType(MultipartFile file) {
         String contentType = file.getContentType() == null
                 ? ""

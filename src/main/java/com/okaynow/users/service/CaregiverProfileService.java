@@ -1,12 +1,15 @@
 package com.okaynow.users.service;
 
+import com.okaynow.common.exception.BadRequestException;
 import com.okaynow.common.exception.ResourceNotFoundException;
 import com.okaynow.storage.LocalFileStorageService;
 import com.okaynow.users.domain.CaregiverProfile;
+import com.okaynow.users.domain.UserStatus;
 import com.okaynow.users.dto.CaregiverProfileResponse;
 import com.okaynow.users.dto.UpdateCaregiverProfileRequest;
 import com.okaynow.users.mapper.UserMapper;
 import com.okaynow.users.repository.CaregiverProfileRepository;
+import com.okaynow.users.repository.UserRepository;
 import com.okaynow.users.support.LegalNameGuard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,6 +23,7 @@ import java.util.UUID;
 public class CaregiverProfileService {
 
     private final CaregiverProfileRepository caregiverProfileRepository;
+    private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final LocalFileStorageService fileStorageService;
 
@@ -30,6 +34,7 @@ public class CaregiverProfileService {
 
     @Transactional
     public CaregiverProfileResponse update(UUID userId, UpdateCaregiverProfileRequest request) {
+        assertProfileEditable(userId);
         CaregiverProfile profile = findByUserId(userId);
         LegalNameGuard.assertUnchanged(
                 profile.getFirstName(), profile.getLastName(),
@@ -48,9 +53,19 @@ public class CaregiverProfileService {
 
     @Transactional
     public CaregiverProfileResponse uploadPhoto(UUID userId, MultipartFile file) {
+        assertProfileEditable(userId);
         CaregiverProfile profile = findByUserId(userId);
         profile.setProfilePhotoUrl(fileStorageService.storeProfilePhoto(profile.getId(), file));
         return userMapper.toCaregiverProfileResponse(profile);
+    }
+
+    private void assertProfileEditable(UUID userId) {
+        var user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        if (user.getStatus() == UserStatus.ACTIVE) {
+            throw new BadRequestException(
+                    "Your profile is locked after verification. You can change your password from account settings.");
+        }
     }
 
     private CaregiverProfile findByUserId(UUID userId) {

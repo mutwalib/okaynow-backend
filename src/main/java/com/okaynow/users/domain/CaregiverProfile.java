@@ -64,6 +64,15 @@ public class CaregiverProfile {
 
     private Double homeLng;
 
+    private String homeAddressLine;
+
+    private String homeCity;
+
+    @Builder.Default
+    private String homeState = "MA";
+
+    private String homeZip;
+
     /** Public URL path for profile photo (e.g. /uploads/profiles/…). */
     private String profilePhotoUrl;
 

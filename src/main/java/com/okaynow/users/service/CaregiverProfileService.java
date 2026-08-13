@@ -2,6 +2,8 @@ package com.okaynow.users.service;
 
 import com.okaynow.common.exception.BadRequestException;
 import com.okaynow.common.exception.ResourceNotFoundException;
+import com.okaynow.common.geo.GeocodingService;
+import com.okaynow.common.geo.ServiceRegionService;
 import com.okaynow.storage.LocalFileStorageService;
 import com.okaynow.users.domain.CaregiverProfile;
 import com.okaynow.users.domain.UserStatus;
@@ -26,6 +28,8 @@ public class CaregiverProfileService {
     private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final LocalFileStorageService fileStorageService;
+    private final ServiceRegionService serviceRegionService;
+    private final GeocodingService geocodingService;
 
     @Transactional(readOnly = true)
     public CaregiverProfileResponse getByUserId(UUID userId) {
@@ -46,8 +50,33 @@ public class CaregiverProfileService {
         profile.setHourlyRateMin(request.hourlyRateMin());
         profile.setHourlyRateMax(request.hourlyRateMax());
         profile.setServiceRadiusMiles(request.serviceRadiusMiles());
-        profile.setHomeLat(request.homeLat());
-        profile.setHomeLng(request.homeLng());
+
+        boolean addressProvided = !isBlank(request.homeAddressLine())
+                || !isBlank(request.homeCity())
+                || !isBlank(request.homeZip())
+                || !isBlank(request.homeState());
+        if (addressProvided) {
+            if (isBlank(request.homeAddressLine()) || isBlank(request.homeCity()) || isBlank(request.homeZip())) {
+                throw new BadRequestException("Enter street address, city, and ZIP for your home location");
+            }
+            var region = serviceRegionService.validate(request.homeState(), request.homeZip());
+            profile.setHomeAddressLine(request.homeAddressLine().trim());
+            profile.setHomeCity(request.homeCity().trim());
+            profile.setHomeState(region.state());
+            profile.setHomeZip(region.zip());
+            var coords = geocodingService.requireGeocode(
+                    profile.getHomeAddressLine(),
+                    profile.getHomeCity(),
+                    profile.getHomeState(),
+                    profile.getHomeZip());
+            profile.setHomeLat(coords.lat());
+            profile.setHomeLng(coords.lng());
+        } else if (request.homeLat() != null && request.homeLng() != null) {
+            // Backward-compatible path for older clients until they send address fields.
+            profile.setHomeLat(request.homeLat());
+            profile.setHomeLng(request.homeLng());
+        }
+
         return userMapper.toCaregiverProfileResponse(profile);
     }
 
@@ -71,5 +100,9 @@ public class CaregiverProfileService {
     private CaregiverProfile findByUserId(UUID userId) {
         return caregiverProfileRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Caregiver profile not found"));
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }

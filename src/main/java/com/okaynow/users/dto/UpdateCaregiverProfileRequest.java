@@ -16,6 +16,11 @@ public record UpdateCaregiverProfileRequest(
         @DecimalMin("0.0") BigDecimal hourlyRateMin,
         @DecimalMin("0.0") BigDecimal hourlyRateMax,
         @Min(1) @Max(200) Integer serviceRadiusMiles,
+        String homeAddressLine,
+        String homeCity,
+        String homeState,
+        String homeZip,
+        /** Optional; preferred path is address fields which the server geocodes. */
         Double homeLat,
         Double homeLng
 ) {

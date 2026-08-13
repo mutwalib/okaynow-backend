@@ -44,6 +44,10 @@ public record AdminUserReviewDetailResponse(
             BigDecimal hourlyRateMin,
             BigDecimal hourlyRateMax,
             Integer serviceRadiusMiles,
+            String homeAddressLine,
+            String homeCity,
+            String homeState,
+            String homeZip,
             Double homeLat,
             Double homeLng,
             String profilePhotoUrl

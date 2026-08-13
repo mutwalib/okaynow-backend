@@ -12,6 +12,8 @@ public record AdminUserResponse(
         String phone,
         Role role,
         UserStatus status,
+        boolean emailVerified,
+        String displayName,
         Instant createdAt
 ) {
 }

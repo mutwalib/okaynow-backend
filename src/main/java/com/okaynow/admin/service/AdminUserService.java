@@ -1,14 +1,24 @@
 package com.okaynow.admin.service;
 
 import com.okaynow.admin.dto.AdminUserResponse;
+import com.okaynow.admin.dto.AdminUserReviewDetailResponse;
 import com.okaynow.admin.dto.CreateAdminRequest;
 import com.okaynow.common.dto.PagedResponse;
 import com.okaynow.common.exception.BadRequestException;
 import com.okaynow.common.exception.ResourceNotFoundException;
+import com.okaynow.marketplace.domain.CaregiverCredential;
+import com.okaynow.marketplace.repository.CaregiverCredentialRepository;
+import com.okaynow.onboarding.domain.OnboardingRequest;
+import com.okaynow.onboarding.domain.OnboardingRequestStatus;
+import com.okaynow.onboarding.repository.OnboardingRequestRepository;
 import com.okaynow.onboarding.service.OnboardingService;
+import com.okaynow.users.domain.CaregiverProfile;
+import com.okaynow.users.domain.ClientProfile;
 import com.okaynow.users.domain.Role;
 import com.okaynow.users.domain.User;
 import com.okaynow.users.domain.UserStatus;
+import com.okaynow.users.repository.CaregiverProfileRepository;
+import com.okaynow.users.repository.ClientProfileRepository;
 import com.okaynow.users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -16,6 +26,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -25,6 +36,10 @@ public class AdminUserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final OnboardingService onboardingService;
+    private final CaregiverProfileRepository caregiverProfileRepository;
+    private final ClientProfileRepository clientProfileRepository;
+    private final OnboardingRequestRepository onboardingRequestRepository;
+    private final CaregiverCredentialRepository caregiverCredentialRepository;
 
     @Transactional(readOnly = true)
     public PagedResponse<AdminUserResponse> search(
@@ -33,6 +48,79 @@ public class AdminUserService {
         return PagedResponse.from(
                 userRepository.search(role, status, normalizedSearch, pageable)
                         .map(this::toResponse));
+    }
+
+    @Transactional(readOnly = true)
+    public AdminUserReviewDetailResponse reviewDetail(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        AdminUserReviewDetailResponse.CaregiverReviewProfile caregiver = null;
+        AdminUserReviewDetailResponse.ClientReviewProfile client = null;
+        List<AdminUserReviewDetailResponse.CredentialSummary> credentials = List.of();
+
+        if (user.getRole() == Role.CAREGIVER) {
+            CaregiverProfile profile = caregiverProfileRepository.findByUserId(userId).orElse(null);
+            if (profile != null) {
+                caregiver = new AdminUserReviewDetailResponse.CaregiverReviewProfile(
+                        profile.getId(),
+                        profile.getFirstName(),
+                        profile.getLastName(),
+                        profile.getQualifications(),
+                        profile.getHourlyRateMin(),
+                        profile.getHourlyRateMax(),
+                        profile.getServiceRadiusMiles(),
+                        profile.getHomeLat(),
+                        profile.getHomeLng(),
+                        profile.getProfilePhotoUrl());
+                credentials = caregiverCredentialRepository
+                        .findByCaregiverProfileIdOrderByCredentialTypeAsc(profile.getId())
+                        .stream()
+                        .map(this::toCredentialSummary)
+                        .toList();
+            }
+        } else if (user.getRole() == Role.CLIENT) {
+            ClientProfile profile = clientProfileRepository.findByUserId(userId).orElse(null);
+            if (profile != null) {
+                client = new AdminUserReviewDetailResponse.ClientReviewProfile(
+                        profile.getId(),
+                        profile.getFirstName(),
+                        profile.getLastName(),
+                        profile.getAddressLine(),
+                        profile.getCity(),
+                        profile.getState(),
+                        profile.getZip(),
+                        profile.getCareNeeds(),
+                        profile.isRegisteringForSelf(),
+                        profile.getMedicaidEligible(),
+                        profile.getRelationshipToCareRecipient());
+            }
+        }
+
+        List<OnboardingRequest> requests =
+                onboardingRequestRepository.findByUserIdOrderByCreatedAtAsc(userId);
+        long open = requests.stream().filter(r -> r.getStatus() == OnboardingRequestStatus.OPEN).count();
+        long submitted = requests.stream()
+                .filter(r -> r.getStatus() == OnboardingRequestStatus.SUBMITTED)
+                .count();
+
+        return new AdminUserReviewDetailResponse(
+                user.getId(),
+                user.getEmail(),
+                user.getPhone(),
+                user.getRole(),
+                user.getStatus(),
+                user.isEmailVerified(),
+                user.getEmailVerifiedAt(),
+                user.getCreatedAt(),
+                displayName(user),
+                user.getStatus() == UserStatus.PENDING_REVIEW,
+                open,
+                submitted,
+                caregiver,
+                client,
+                credentials,
+                requests.stream().map(this::toKycSummary).toList());
     }
 
     @Transactional
@@ -81,6 +169,52 @@ public class AdminUserService {
                 user.getPhone(),
                 user.getRole(),
                 user.getStatus(),
+                user.isEmailVerified(),
+                displayName(user),
                 user.getCreatedAt());
+    }
+
+    private String displayName(User user) {
+        if (user.getRole() == Role.CAREGIVER) {
+            return caregiverProfileRepository.findByUserId(user.getId())
+                    .map(p -> (safe(p.getFirstName()) + " " + safe(p.getLastName())).trim())
+                    .filter(s -> !s.isBlank())
+                    .orElse(user.getEmail());
+        }
+        if (user.getRole() == Role.CLIENT) {
+            return clientProfileRepository.findByUserId(user.getId())
+                    .map(p -> (safe(p.getFirstName()) + " " + safe(p.getLastName())).trim())
+                    .filter(s -> !s.isBlank())
+                    .orElse(user.getEmail());
+        }
+        return user.getEmail();
+    }
+
+    private static String safe(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private AdminUserReviewDetailResponse.CredentialSummary toCredentialSummary(CaregiverCredential c) {
+        return new AdminUserReviewDetailResponse.CredentialSummary(
+                c.getId(),
+                c.getCredentialType().name(),
+                c.getLicenseNumber(),
+                c.getIssueDate(),
+                c.getExpiryDate(),
+                c.getDocumentUrl(),
+                c.getVerificationStatus().name());
+    }
+
+    private AdminUserReviewDetailResponse.KycRequestSummary toKycSummary(OnboardingRequest req) {
+        return new AdminUserReviewDetailResponse.KycRequestSummary(
+                req.getId(),
+                req.getTitle(),
+                req.getInstructions(),
+                req.getFieldType(),
+                req.getStatus(),
+                req.getResponseText(),
+                req.getFileUrl(),
+                req.getCreatedAt(),
+                req.getSubmittedAt());
     }
 }

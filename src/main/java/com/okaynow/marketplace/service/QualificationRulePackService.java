@@ -13,6 +13,7 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
@@ -22,6 +23,7 @@ import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class QualificationRulePackService implements ApplicationRunner {
 
     private final QualificationRulePackRepository repository;
@@ -30,7 +32,14 @@ public class QualificationRulePackService implements ApplicationRunner {
     @Transactional
     public void run(ApplicationArguments args) {
         for (Qualification q : Qualification.values()) {
-            getOrCreate(q);
+            try {
+                getOrCreate(q);
+            } catch (Exception ex) {
+                // If the DB schema/check constraints haven't been updated to include
+                // newer Qualification enum values (e.g. MAP/OTHER), we don't want
+                // to crash the whole application on startup.
+                log.warn("Skipping qualification_rule_packs seed for {}: {}", q, ex.getMessage());
+            }
         }
     }
 

@@ -101,6 +101,14 @@ public class LocalFileStorageService {
         String contentType = file.getContentType() == null
                 ? ""
                 : file.getContentType().toLowerCase(Locale.US).trim();
+        // iOS may report HEIC/HEIF even when the picker has already transcoded
+        // the bytes to JPEG.  Treat as JPEG so the allow-list accepts it.
+        if ("image/heic".equals(contentType)
+                || "image/heif".equals(contentType)
+                || "image/heic-sequence".equals(contentType)
+                || "image/heif-sequence".equals(contentType)) {
+            return "image/jpeg";
+        }
         // React Native / some browsers send octet-stream or empty; sniff by filename.
         if (contentType.isEmpty()
                 || "application/octet-stream".equals(contentType)
@@ -113,6 +121,9 @@ public class LocalFileStorageService {
             }
             if (name.endsWith(".webp")) {
                 return "image/webp";
+            }
+            if (name.endsWith(".heic") || name.endsWith(".heif")) {
+                return "image/jpeg";
             }
             if (name.endsWith(".jpg") || name.endsWith(".jpeg")) {
                 return "image/jpeg";

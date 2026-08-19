@@ -178,6 +178,29 @@ public class QualificationRulePackService implements ApplicationRunner {
                     .travelPayEnabled(true)
                     .travelPayPerMinute(new BigDecimal("0.35"))
                     .build();
+            case MAP -> QualificationRulePack.builder()
+                    .qualification(q)
+                    .preferredChannel(ShiftChannel.HOME)
+                    .matchingMode(MatchingMode.RADIUS)
+                    .enforceCredentials(false)
+                    .requiredCredentials(creds(
+                            CredentialType.LICENSE, CredentialType.CPR, CredentialType.CORI))
+                    .credentialExpiryBlockDays(30)
+                    .cancelNoticeHours(4)
+                    .surgeEligible(false)
+                    .evvRequired(true)
+                    .build();
+            case OTHER -> QualificationRulePack.builder()
+                    .qualification(q)
+                    .preferredChannel(ShiftChannel.BOTH)
+                    .matchingMode(MatchingMode.RADIUS)
+                    .enforceCredentials(false)
+                    .requiredCredentials(creds(CredentialType.CORI))
+                    .credentialExpiryBlockDays(30)
+                    .cancelNoticeHours(4)
+                    .surgeEligible(false)
+                    .evvRequired(false)
+                    .build();
         };
     }
 

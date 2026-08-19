@@ -1,11 +1,21 @@
 package com.okaynow.users.service;
 
+import com.okaynow.audit.domain.AuditAction;
+import com.okaynow.audit.service.AuditLogService;
 import com.okaynow.common.exception.BadRequestException;
 import com.okaynow.common.exception.ResourceNotFoundException;
 import com.okaynow.common.geo.GeocodingService;
 import com.okaynow.common.geo.ServiceRegionService;
+import com.okaynow.notifications.domain.NotificationType;
+import com.okaynow.notifications.service.NotificationService;
+import com.okaynow.onboarding.domain.OnboardingFieldType;
+import com.okaynow.onboarding.domain.OnboardingRequest;
+import com.okaynow.onboarding.domain.OnboardingRequestStatus;
+import com.okaynow.onboarding.repository.OnboardingRequestRepository;
 import com.okaynow.storage.LocalFileStorageService;
 import com.okaynow.users.domain.CaregiverProfile;
+import com.okaynow.users.domain.Qualification;
+import com.okaynow.users.domain.User;
 import com.okaynow.users.domain.UserStatus;
 import com.okaynow.users.dto.CaregiverProfileResponse;
 import com.okaynow.users.dto.UpdateCaregiverProfileRequest;
@@ -18,7 +28,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +43,9 @@ public class CaregiverProfileService {
     private final LocalFileStorageService fileStorageService;
     private final ServiceRegionService serviceRegionService;
     private final GeocodingService geocodingService;
+    private final OnboardingRequestRepository onboardingRequestRepository;
+    private final NotificationService notificationService;
+    private final AuditLogService auditLogService;
 
     @Transactional(readOnly = true)
     public CaregiverProfileResponse getByUserId(UUID userId) {
@@ -44,6 +60,11 @@ public class CaregiverProfileService {
                 profile.getFirstName(), profile.getLastName(),
                 request.firstName(), request.lastName());
         if (request.qualifications() != null) {
+            // Defensive: JPA rows from older migrations may have null collection state.
+            // Null here would otherwise cause an unhandled NPE and a generic 500.
+            if (profile.getQualifications() == null) {
+                profile.setQualifications(new LinkedHashSet<>());
+            }
             profile.getQualifications().clear();
             profile.getQualifications().addAll(request.qualifications());
         }
@@ -72,9 +93,62 @@ public class CaregiverProfileService {
             profile.setHomeLat(coords.lat());
             profile.setHomeLng(coords.lng());
         } else if (request.homeLat() != null && request.homeLng() != null) {
-            // Backward-compatible path for older clients until they send address fields.
             profile.setHomeLat(request.homeLat());
             profile.setHomeLng(request.homeLng());
+        }
+
+        return userMapper.toCaregiverProfileResponse(profile);
+    }
+
+    /**
+     * Adds qualifications only (never removes). Triggers agency reverification when the
+     * account was already submitted or active.
+     */
+    @Transactional
+    public CaregiverProfileResponse addQualifications(UUID userId, Set<Qualification> toAdd) {
+        if (toAdd == null || toAdd.isEmpty()) {
+            throw new BadRequestException("Select at least one qualification to add");
+        }
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        CaregiverProfile profile = findByUserId(userId);
+
+        Set<Qualification> existing = new LinkedHashSet<>(
+                profile.getQualifications() == null ? new LinkedHashSet<>() : profile.getQualifications());
+        Set<Qualification> added = toAdd.stream()
+                .filter(q -> !existing.contains(q))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (added.isEmpty()) {
+            throw new BadRequestException("Those qualifications are already on your profile");
+        }
+        profile.getQualifications().addAll(added);
+
+        boolean needsReverification = user.getStatus() == UserStatus.ACTIVE
+                || user.getApplicationSubmittedAt() != null;
+        if (needsReverification) {
+            if (user.getStatus() == UserStatus.ACTIVE) {
+                user.setStatus(UserStatus.PENDING_REVIEW);
+            }
+            user.setApplicationSubmittedAt(null);
+            String labels = added.stream().map(CaregiverProfileService::labelFor).collect(Collectors.joining(", "));
+            onboardingRequestRepository.save(OnboardingRequest.builder()
+                    .userId(user.getId())
+                    .requestedByUserId(null)
+                    .title("Verify new qualification" + (added.size() == 1 ? "" : "s") + ": " + labels)
+                    .instructions(
+                            "You added new qualification(s) to your profile. Upload proof of certification/license "
+                                    + "for: " + labels + ".")
+                    .fieldType(OnboardingFieldType.FILE)
+                    .status(OnboardingRequestStatus.OPEN)
+                    .build());
+            notificationService.notifyUser(
+                    user,
+                    NotificationType.ONBOARDING_INFO_REQUESTED,
+                    "New qualification needs verification",
+                    "Upload proof for: " + labels + ". Your account is under agency review until approved.",
+                    null);
+            auditLogService.record(user, AuditAction.CAREGIVER_QUALIFICATIONS_ADDED, "USER", user.getId(), null,
+                    "added=" + labels);
         }
 
         return userMapper.toCaregiverProfileResponse(profile);
@@ -93,11 +167,11 @@ public class CaregiverProfileService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         if (user.getStatus() == UserStatus.ACTIVE) {
             throw new BadRequestException(
-                    "Your profile is locked after verification. You can change your password from account settings.");
+                    "Your profile is locked after verification. You can add a new qualification (which requires agency review) or change your password.");
         }
         if (user.getApplicationSubmittedAt() != null) {
             throw new BadRequestException(
-                    "Your application is locked after submission. If the agency asks you to update something, it will reopen below.");
+                    "Your application is locked after submission. You can add a new qualification (which reopens review) if needed.");
         }
     }
 
@@ -108,5 +182,13 @@ public class CaregiverProfileService {
 
     private static boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private static String labelFor(Qualification q) {
+        return switch (q) {
+            case MAP -> "MAP certification";
+            case OTHER -> "Other (not specified)";
+            default -> q.name();
+        };
     }
 }

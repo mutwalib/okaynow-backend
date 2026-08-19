@@ -1,5 +1,6 @@
 package com.okaynow.users.controller;
 
+import com.okaynow.users.dto.AddCaregiverQualificationsRequest;
 import com.okaynow.users.dto.CaregiverProfileResponse;
 import com.okaynow.users.dto.UpdateCaregiverProfileRequest;
 import com.okaynow.users.service.CaregiverProfileService;
@@ -40,6 +41,15 @@ public class CaregiverController {
     public ResponseEntity<CaregiverProfileResponse> update(Authentication authentication,
                                                            @Valid @RequestBody UpdateCaregiverProfileRequest request) {
         return ResponseEntity.ok(caregiverProfileService.update(currentUserId(authentication), request));
+    }
+
+    @PostMapping("/me/qualifications")
+    @PreAuthorize("hasRole('CAREGIVER')")
+    public ResponseEntity<CaregiverProfileResponse> addQualifications(
+            Authentication authentication,
+            @Valid @RequestBody AddCaregiverQualificationsRequest request) {
+        return ResponseEntity.ok(caregiverProfileService.addQualifications(
+                currentUserId(authentication), request.qualifications()));
     }
 
     @PostMapping(value = "/me/photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

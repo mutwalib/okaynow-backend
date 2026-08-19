@@ -80,6 +80,9 @@ public class PendingReviewAccessFilter extends OncePerRequestFilter {
                 && ("GET".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method))) {
             return true;
         }
+        if ("/api/caregivers/me/qualifications".equals(path) && "POST".equalsIgnoreCase(method)) {
+            return true;
+        }
         if ("/api/caregivers/me/photo".equals(path) && "POST".equalsIgnoreCase(method)) {
             return true;
         }

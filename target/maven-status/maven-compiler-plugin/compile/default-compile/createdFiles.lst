@@ -31,6 +31,7 @@ com/okaynow/evv/domain/Visit.class
 com/okaynow/legal/dto/LegalDocumentResponse.class
 com/okaynow/marketplace/service/QualificationRulePackService.class
 com/okaynow/admin/dto/ClientType.class
+com/okaynow/users/service/CaregiverProfileService$1.class
 com/okaynow/legal/dto/LegalAcceptanceStatusResponse.class
 com/okaynow/booking/repository/ShiftClaimRepository.class
 com/okaynow/config/ShiftDurationBackfillConfig.class
@@ -75,7 +76,6 @@ com/okaynow/notifications/domain/Notification.class
 com/okaynow/users/controller/UserController.class
 com/okaynow/legal/domain/LegalAcceptance.class
 com/okaynow/users/domain/FacilityProfile.class
-com/okaynow/users/service/CaregiverProfileService.class
 com/okaynow/audit/service/AuditLogService.class
 com/okaynow/marketplace/domain/CaregiverCredential.class
 com/okaynow/payroll/dto/CreateClientInvoiceRequest.class

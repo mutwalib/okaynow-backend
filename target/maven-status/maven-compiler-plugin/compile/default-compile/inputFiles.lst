@@ -254,6 +254,7 @@
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/users/domain/Role.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/users/domain/User.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/users/domain/UserStatus.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/users/dto/AddCaregiverQualificationsRequest.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/users/dto/CaregiverOptionResponse.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/users/dto/CaregiverProfileResponse.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/users/dto/ClientOptionResponse.java

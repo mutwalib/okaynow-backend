@@ -2,6 +2,7 @@ package com.okaynow.admin.controller;
 
 import com.okaynow.admin.dto.AdminUserResponse;
 import com.okaynow.admin.dto.AdminUserReviewDetailResponse;
+import com.okaynow.admin.dto.CorrectLegalNameRequest;
 import com.okaynow.admin.dto.CreateAdminRequest;
 import com.okaynow.admin.dto.UpdateUserStatusRequest;
 import com.okaynow.admin.service.AdminUserService;
@@ -62,6 +63,15 @@ public class AdminUserController {
             Authentication authentication) {
         return ResponseEntity.ok(
                 adminUserService.updateStatus(id, request.status(), authentication.getName()));
+    }
+
+    @PatchMapping("/{id}/legal-name")
+    public ResponseEntity<AdminUserReviewDetailResponse> correctLegalName(
+            @PathVariable UUID id,
+            @Valid @RequestBody CorrectLegalNameRequest request,
+            Authentication authentication) {
+        return ResponseEntity.ok(adminUserService.correctLegalName(
+                id, request.firstName(), request.lastName(), authentication.getName()));
     }
 
     @PostMapping("/owners")

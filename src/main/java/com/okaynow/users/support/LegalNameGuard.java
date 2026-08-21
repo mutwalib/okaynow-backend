@@ -3,8 +3,8 @@ package com.okaynow.users.support;
 import com.okaynow.common.exception.BadRequestException;
 
 /**
- * Legal / registered names are immutable after signup for marketplace integrity.
- * Corrections require agency intervention (not self-service).
+ * Legal / registered names are immutable after signup for self-service updates.
+ * Corrections require agency staff to update the name on the user's behalf.
  */
 public final class LegalNameGuard {
 

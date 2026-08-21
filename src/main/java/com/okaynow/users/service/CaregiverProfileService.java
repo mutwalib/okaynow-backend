@@ -28,7 +28,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.LinkedHashSet;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -52,34 +55,68 @@ public class CaregiverProfileService {
         return userMapper.toCaregiverProfileResponse(findByUserId(userId));
     }
 
+    /**
+     * Updates caregiver application details. After submission or while ACTIVE, any material
+     * change moves the account back to {@link UserStatus#PENDING_REVIEW}.
+     */
     @Transactional
     public CaregiverProfileResponse update(UUID userId, UpdateCaregiverProfileRequest request) {
-        assertProfileEditable(userId);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         CaregiverProfile profile = findByUserId(userId);
+
+        // Legal names are not self-service. Agency staff must correct them on request.
         LegalNameGuard.assertUnchanged(
                 profile.getFirstName(), profile.getLastName(),
                 request.firstName(), request.lastName());
-        if (request.qualifications() != null) {
-            // Defensive: JPA rows from older migrations may have null collection state.
-            // Null here would otherwise cause an unhandled NPE and a generic 500.
-            if (profile.getQualifications() == null) {
-                profile.setQualifications(new LinkedHashSet<>());
-            }
-            profile.getQualifications().clear();
-            profile.getQualifications().addAll(request.qualifications());
+
+        Set<Qualification> nextQuals = request.qualifications() == null
+                ? null
+                : new LinkedHashSet<>(request.qualifications());
+        if (nextQuals != null && nextQuals.isEmpty()) {
+            throw new BadRequestException("Select at least one qualification");
         }
-        profile.setHourlyRateMin(request.hourlyRateMin());
-        profile.setHourlyRateMax(request.hourlyRateMax());
-        profile.setServiceRadiusMiles(request.serviceRadiusMiles());
+        Set<Qualification> currentQuals = new LinkedHashSet<>(
+                profile.getQualifications() == null ? Set.of() : profile.getQualifications());
+        boolean qualsChanged = nextQuals != null && !nextQuals.equals(currentQuals);
 
         boolean addressProvided = !isBlank(request.homeAddressLine())
                 || !isBlank(request.homeCity())
                 || !isBlank(request.homeZip())
                 || !isBlank(request.homeState());
+        boolean addressChanged = false;
         if (addressProvided) {
             if (isBlank(request.homeAddressLine()) || isBlank(request.homeCity()) || isBlank(request.homeZip())) {
                 throw new BadRequestException("Enter street address, city, and ZIP for your home location");
             }
+            addressChanged = !normalizeText(profile.getHomeAddressLine()).equals(normalizeText(request.homeAddressLine()))
+                    || !normalizeText(profile.getHomeCity()).equals(normalizeText(request.homeCity()))
+                    || !normalizeText(profile.getHomeZip()).equals(normalizeText(request.homeZip()))
+                    || (!isBlank(request.homeState())
+                    && !normalizeText(profile.getHomeState()).equals(normalizeText(request.homeState())));
+        }
+
+        boolean latLngChanged = request.homeLat() != null && request.homeLng() != null
+                && (!Objects.equals(profile.getHomeLat(), request.homeLat())
+                || !Objects.equals(profile.getHomeLng(), request.homeLng()));
+
+        // Pay range and service radius can change freely. Reverification is only for
+        // qualifications / home location (identity and matching-critical fields).
+        boolean requiresReverification = qualsChanged || addressChanged || latLngChanged;
+
+        if (nextQuals != null) {
+            // Defensive: JPA rows from older migrations may have null collection state.
+            if (profile.getQualifications() == null) {
+                profile.setQualifications(new LinkedHashSet<>());
+            }
+            profile.getQualifications().clear();
+            profile.getQualifications().addAll(nextQuals);
+        }
+        profile.setHourlyRateMin(request.hourlyRateMin());
+        profile.setHourlyRateMax(request.hourlyRateMax());
+        profile.setServiceRadiusMiles(request.serviceRadiusMiles());
+
+        if (addressProvided) {
             var region = serviceRegionService.validate(request.homeState(), request.homeZip());
             profile.setHomeAddressLine(request.homeAddressLine().trim());
             profile.setHomeCity(request.homeCity().trim());
@@ -95,6 +132,12 @@ public class CaregiverProfileService {
         } else if (request.homeLat() != null && request.homeLng() != null) {
             profile.setHomeLat(request.homeLat());
             profile.setHomeLng(request.homeLng());
+        }
+
+        boolean needsReverification = requiresReverification
+                && (user.getStatus() == UserStatus.ACTIVE || user.getApplicationSubmittedAt() != null);
+        if (needsReverification) {
+            triggerProfileReverification(user, nextQuals, currentQuals, qualsChanged);
         }
 
         return userMapper.toCaregiverProfileResponse(profile);
@@ -156,22 +199,69 @@ public class CaregiverProfileService {
 
     @Transactional
     public CaregiverProfileResponse uploadPhoto(UUID userId, MultipartFile file) {
-        assertProfileEditable(userId);
+        assertPhotoEditable(userId);
         CaregiverProfile profile = findByUserId(userId);
         profile.setProfilePhotoUrl(fileStorageService.storeProfilePhoto(profile.getId(), file));
         return userMapper.toCaregiverProfileResponse(profile);
     }
 
-    private void assertProfileEditable(UUID userId) {
+    private void triggerProfileReverification(
+            User user,
+            Set<Qualification> nextQuals,
+            Set<Qualification> previousQuals,
+            boolean qualsChanged) {
+        if (user.getStatus() == UserStatus.ACTIVE) {
+            user.setStatus(UserStatus.PENDING_REVIEW);
+        }
+        // Keep them in the under-review waiting room with the updated details.
+        user.setApplicationSubmittedAt(Instant.now());
+
+        if (qualsChanged && nextQuals != null) {
+            Set<Qualification> newlyAdded = nextQuals.stream()
+                    .filter(q -> !previousQuals.contains(q))
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+            if (!newlyAdded.isEmpty()) {
+                String labels = newlyAdded.stream()
+                        .map(CaregiverProfileService::labelFor)
+                        .collect(Collectors.joining(", "));
+                onboardingRequestRepository.save(OnboardingRequest.builder()
+                        .userId(user.getId())
+                        .requestedByUserId(null)
+                        .title("Verify new qualification" + (newlyAdded.size() == 1 ? "" : "s") + ": " + labels)
+                        .instructions(
+                                "You updated your qualifications. Upload proof of certification/license for: "
+                                        + labels + ".")
+                        .fieldType(OnboardingFieldType.FILE)
+                        .status(OnboardingRequestStatus.OPEN)
+                        .build());
+            }
+        }
+
+        notificationService.notifyUser(
+                user,
+                NotificationType.ONBOARDING_INFO_REQUESTED,
+                "Profile update under review",
+                "You updated your application details. Your account is under agency review until approved again.",
+                null);
+        auditLogService.record(
+                user,
+                AuditAction.CAREGIVER_PROFILE_UPDATED_FOR_REVIEW,
+                "USER",
+                user.getId(),
+                null,
+                "status=PENDING_REVIEW");
+    }
+
+    private void assertPhotoEditable(UUID userId) {
         var user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         if (user.getStatus() == UserStatus.ACTIVE) {
             throw new BadRequestException(
-                    "Your profile is locked after verification. You can add a new qualification (which requires agency review) or change your password.");
+                    "Your profile photo is locked after verification. You can update name, qualifications, rates, or address — that sends your account back for review.");
         }
         if (user.getApplicationSubmittedAt() != null) {
             throw new BadRequestException(
-                    "Your application is locked after submission. You can add a new qualification (which reopens review) if needed.");
+                    "Your profile photo is locked after submission. You can update other profile details, which reopens review.");
         }
     }
 
@@ -182,6 +272,20 @@ public class CaregiverProfileService {
 
     private static boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private static String normalizeText(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private static boolean sameDecimal(BigDecimal a, BigDecimal b) {
+        if (a == null && b == null) {
+            return true;
+        }
+        if (a == null || b == null) {
+            return false;
+        }
+        return a.compareTo(b) == 0;
     }
 
     private static String labelFor(Qualification q) {

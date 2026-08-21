@@ -49,7 +49,9 @@ public class CaregiverController {
             Authentication authentication,
             @Valid @RequestBody AddCaregiverQualificationsRequest request) {
         return ResponseEntity.ok(caregiverProfileService.addQualifications(
-                currentUserId(authentication), request.qualifications()));
+                currentUserId(authentication),
+                request.qualifications(),
+                request.otherQualificationDetail()));
     }
 
     @PostMapping(value = "/me/photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

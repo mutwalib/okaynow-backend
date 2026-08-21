@@ -13,6 +13,8 @@ public record UpdateCaregiverProfileRequest(
         @NotBlank String firstName,
         @NotBlank String lastName,
         Set<Qualification> qualifications,
+        /** Required when qualifications includes OTHER. */
+        String otherQualificationDetail,
         @DecimalMin("0.0") BigDecimal hourlyRateMin,
         @DecimalMin("0.0") BigDecimal hourlyRateMax,
         @Min(1) @Max(200) Integer serviceRadiusMiles,

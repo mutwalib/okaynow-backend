@@ -15,6 +15,7 @@ import com.okaynow.onboarding.dto.OnboardingStatusResponse;
 import com.okaynow.onboarding.repository.OnboardingRequestRepository;
 import com.okaynow.storage.LocalFileStorageService;
 import com.okaynow.users.domain.CaregiverProfile;
+import com.okaynow.users.domain.Qualification;
 import com.okaynow.users.domain.ClientProfile;
 import com.okaynow.users.domain.Role;
 import com.okaynow.users.domain.User;
@@ -136,6 +137,10 @@ public class OnboardingService {
                     || profile.getQualifications() == null
                     || profile.getQualifications().isEmpty()) {
                 missing.add("Add at least one qualification");
+            } else if (profile.getQualifications().contains(Qualification.OTHER)
+                    && (profile.getOtherQualificationDetail() == null
+                    || profile.getOtherQualificationDetail().isBlank())) {
+                missing.add("Specify your Other qualification");
             }
             if (profile == null
                     || isBlank(profile.getHomeAddressLine())

@@ -73,6 +73,7 @@ public class AdminUserService {
                         profile.getFirstName(),
                         profile.getLastName(),
                         profile.getQualifications(),
+                        profile.getOtherQualificationDetail(),
                         profile.getHourlyRateMin(),
                         profile.getHourlyRateMax(),
                         profile.getServiceRadiusMiles(),

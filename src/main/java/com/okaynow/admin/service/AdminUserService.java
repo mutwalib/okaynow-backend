@@ -3,6 +3,8 @@ package com.okaynow.admin.service;
 import com.okaynow.admin.dto.AdminUserResponse;
 import com.okaynow.admin.dto.AdminUserReviewDetailResponse;
 import com.okaynow.admin.dto.CreateAdminRequest;
+import com.okaynow.audit.domain.AuditAction;
+import com.okaynow.audit.service.AuditLogService;
 import com.okaynow.common.dto.PagedResponse;
 import com.okaynow.common.exception.BadRequestException;
 import com.okaynow.common.exception.ResourceNotFoundException;
@@ -14,11 +16,13 @@ import com.okaynow.onboarding.repository.OnboardingRequestRepository;
 import com.okaynow.onboarding.service.OnboardingService;
 import com.okaynow.users.domain.CaregiverProfile;
 import com.okaynow.users.domain.ClientProfile;
+import com.okaynow.users.domain.FacilityProfile;
 import com.okaynow.users.domain.Role;
 import com.okaynow.users.domain.User;
 import com.okaynow.users.domain.UserStatus;
 import com.okaynow.users.repository.CaregiverProfileRepository;
 import com.okaynow.users.repository.ClientProfileRepository;
+import com.okaynow.users.repository.FacilityProfileRepository;
 import com.okaynow.users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -38,8 +42,10 @@ public class AdminUserService {
     private final OnboardingService onboardingService;
     private final CaregiverProfileRepository caregiverProfileRepository;
     private final ClientProfileRepository clientProfileRepository;
+    private final FacilityProfileRepository facilityProfileRepository;
     private final OnboardingRequestRepository onboardingRequestRepository;
     private final CaregiverCredentialRepository caregiverCredentialRepository;
+    private final AuditLogService auditLogService;
 
     @Transactional(readOnly = true)
     public PagedResponse<AdminUserResponse> search(
@@ -146,6 +152,61 @@ public class AdminUserService {
         }
         user.setStatus(status);
         return toResponse(user);
+    }
+
+    @Transactional
+    public AdminUserReviewDetailResponse correctLegalName(
+            UUID userId, String firstName, String lastName, String actingAdminEmail) {
+        String nextFirst = normalizePersonName(firstName);
+        String nextLast = normalizePersonName(lastName);
+        if (nextFirst.isEmpty() || nextLast.isEmpty()) {
+            throw new BadRequestException("First and last name are required");
+        }
+
+        User target = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        User admin = userRepository.findByEmail(actingAdminEmail.toLowerCase().trim())
+                .orElseThrow(() -> new ResourceNotFoundException("Admin user not found"));
+
+        String previous;
+        if (target.getRole() == Role.CAREGIVER) {
+            CaregiverProfile profile = caregiverProfileRepository.findByUserId(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Caregiver profile not found"));
+            previous = profile.getFirstName() + " " + profile.getLastName();
+            profile.setFirstName(nextFirst);
+            profile.setLastName(nextLast);
+        } else if (target.getRole() == Role.CLIENT) {
+            ClientProfile profile = clientProfileRepository.findByUserId(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Client profile not found"));
+            previous = profile.getFirstName() + " " + profile.getLastName();
+            profile.setFirstName(nextFirst);
+            profile.setLastName(nextLast);
+        } else if (target.getRole() == Role.FACILITY) {
+            FacilityProfile profile = facilityProfileRepository.findByUserId(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Facility profile not found"));
+            previous = profile.getContactFirstName() + " " + profile.getContactLastName();
+            profile.setContactFirstName(nextFirst);
+            profile.setContactLastName(nextLast);
+        } else {
+            throw new BadRequestException("Legal name corrections apply to caregivers, clients, and facilities only");
+        }
+
+        auditLogService.record(
+                admin,
+                AuditAction.LEGAL_NAME_CORRECTED_BY_ADMIN,
+                "USER",
+                target.getId(),
+                null,
+                "previous=" + previous.trim() + "; next=" + nextFirst + " " + nextLast);
+
+        return reviewDetail(userId);
+    }
+
+    private static String normalizePersonName(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.trim().replaceAll("\\s+", " ");
     }
 
     @Transactional

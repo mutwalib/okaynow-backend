@@ -6,6 +6,8 @@ import jakarta.validation.constraints.NotEmpty;
 import java.util.Set;
 
 public record AddCaregiverQualificationsRequest(
-        @NotEmpty Set<Qualification> qualifications
+        @NotEmpty Set<Qualification> qualifications,
+        /** Required when qualifications includes OTHER. */
+        String otherQualificationDetail
 ) {
 }

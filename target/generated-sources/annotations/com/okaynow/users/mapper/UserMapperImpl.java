@@ -21,8 +21,8 @@ import org.springframework.stereotype.Component;
 
 @Generated(
     value = "org.mapstruct.ap.MappingProcessor",
-    date = "2026-08-20T20:28:09-0400",
-    comments = "version: 1.5.5.Final, compiler: javac, environment: Java 26.0.1 (Eclipse Adoptium)"
+    date = "2026-08-20T20:39:09-0400",
+    comments = "version: 1.5.5.Final, compiler: Eclipse JDT (IDE) 3.46.100.v20260624-0231, environment: Java 21.0.11 (Eclipse Adoptium)"
 )
 @Component
 public class UserMapperImpl implements UserMapper {
@@ -63,6 +63,7 @@ public class UserMapperImpl implements UserMapper {
         String firstName = null;
         String lastName = null;
         Set<Qualification> qualifications = null;
+        String otherQualificationDetail = null;
         BigDecimal hourlyRateMin = null;
         BigDecimal hourlyRateMax = null;
         Integer serviceRadiusMiles = null;
@@ -84,6 +85,7 @@ public class UserMapperImpl implements UserMapper {
         if ( set != null ) {
             qualifications = new LinkedHashSet<Qualification>( set );
         }
+        otherQualificationDetail = profile.getOtherQualificationDetail();
         hourlyRateMin = profile.getHourlyRateMin();
         hourlyRateMax = profile.getHourlyRateMax();
         serviceRadiusMiles = profile.getServiceRadiusMiles();
@@ -97,7 +99,7 @@ public class UserMapperImpl implements UserMapper {
         ratingAvg = profile.getRatingAvg();
         ratingCount = profile.getRatingCount();
 
-        CaregiverProfileResponse caregiverProfileResponse = new CaregiverProfileResponse( id, userId, firstName, lastName, qualifications, hourlyRateMin, hourlyRateMax, serviceRadiusMiles, homeAddressLine, homeCity, homeState, homeZip, homeLat, homeLng, profilePhotoUrl, ratingAvg, ratingCount );
+        CaregiverProfileResponse caregiverProfileResponse = new CaregiverProfileResponse( id, userId, firstName, lastName, qualifications, otherQualificationDetail, hourlyRateMin, hourlyRateMax, serviceRadiusMiles, homeAddressLine, homeCity, homeState, homeZip, homeLat, homeLng, profilePhotoUrl, ratingAvg, ratingCount );
 
         return caregiverProfileResponse;
     }

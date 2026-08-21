@@ -54,6 +54,12 @@ public class CaregiverProfile {
     @Builder.Default
     private Set<Qualification> qualifications = new LinkedHashSet<>();
 
+    /**
+     * Free-text description required when {@link Qualification#OTHER} is selected.
+     */
+    @Column(length = 200)
+    private String otherQualificationDetail;
+
     private BigDecimal hourlyRateMin;
 
     private BigDecimal hourlyRateMax;

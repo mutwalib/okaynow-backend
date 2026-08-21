@@ -76,9 +76,13 @@ public class CaregiverProfileService {
         if (nextQuals != null && nextQuals.isEmpty()) {
             throw new BadRequestException("Select at least one qualification");
         }
+        Set<Qualification> effectiveQuals = nextQuals != null ? nextQuals : currentQualsOrEmpty(profile);
+        String nextOtherDetail = resolveOtherQualificationDetail(effectiveQuals, request.otherQualificationDetail());
         Set<Qualification> currentQuals = new LinkedHashSet<>(
                 profile.getQualifications() == null ? Set.of() : profile.getQualifications());
         boolean qualsChanged = nextQuals != null && !nextQuals.equals(currentQuals);
+        boolean otherDetailChanged = !normalizeText(profile.getOtherQualificationDetail())
+                .equals(normalizeText(nextOtherDetail));
 
         boolean addressProvided = !isBlank(request.homeAddressLine())
                 || !isBlank(request.homeCity())
@@ -102,7 +106,7 @@ public class CaregiverProfileService {
 
         // Pay range and service radius can change freely. Reverification is only for
         // qualifications / home location (identity and matching-critical fields).
-        boolean requiresReverification = qualsChanged || addressChanged || latLngChanged;
+        boolean requiresReverification = qualsChanged || otherDetailChanged || addressChanged || latLngChanged;
 
         if (nextQuals != null) {
             // Defensive: JPA rows from older migrations may have null collection state.
@@ -112,6 +116,7 @@ public class CaregiverProfileService {
             profile.getQualifications().clear();
             profile.getQualifications().addAll(nextQuals);
         }
+        profile.setOtherQualificationDetail(nextOtherDetail);
         profile.setHourlyRateMin(request.hourlyRateMin());
         profile.setHourlyRateMax(request.hourlyRateMax());
         profile.setServiceRadiusMiles(request.serviceRadiusMiles());
@@ -148,7 +153,8 @@ public class CaregiverProfileService {
      * account was already submitted or active.
      */
     @Transactional
-    public CaregiverProfileResponse addQualifications(UUID userId, Set<Qualification> toAdd) {
+    public CaregiverProfileResponse addQualifications(
+            UUID userId, Set<Qualification> toAdd, String otherQualificationDetail) {
         if (toAdd == null || toAdd.isEmpty()) {
             throw new BadRequestException("Select at least one qualification to add");
         }
@@ -164,7 +170,13 @@ public class CaregiverProfileService {
         if (added.isEmpty()) {
             throw new BadRequestException("Those qualifications are already on your profile");
         }
+        Set<Qualification> merged = new LinkedHashSet<>(existing);
+        merged.addAll(added);
+        String nextOtherDetail = resolveOtherQualificationDetail(
+                merged,
+                otherQualificationDetail != null ? otherQualificationDetail : profile.getOtherQualificationDetail());
         profile.getQualifications().addAll(added);
+        profile.setOtherQualificationDetail(nextOtherDetail);
 
         boolean needsReverification = user.getStatus() == UserStatus.ACTIVE
                 || user.getApplicationSubmittedAt() != null;
@@ -294,5 +306,30 @@ public class CaregiverProfileService {
             case OTHER -> "Other (not specified)";
             default -> q.name();
         };
+    }
+
+    private static Set<Qualification> currentQualsOrEmpty(CaregiverProfile profile) {
+        return new LinkedHashSet<>(
+                profile.getQualifications() == null ? Set.of() : profile.getQualifications());
+    }
+
+    /**
+     * When OTHER is selected, a free-text description is required. Otherwise clear it.
+     */
+    private static String resolveOtherQualificationDetail(
+            Set<Qualification> qualifications, String requestedDetail) {
+        boolean includesOther = qualifications != null && qualifications.contains(Qualification.OTHER);
+        if (!includesOther) {
+            return null;
+        }
+        String detail = requestedDetail == null ? "" : requestedDetail.trim().replaceAll("\\s+", " ");
+        if (detail.isEmpty()) {
+            throw new BadRequestException(
+                    "Specify what your Other qualification is (required when Other is selected)");
+        }
+        if (detail.length() > 200) {
+            throw new BadRequestException("Other qualification description must be 200 characters or fewer");
+        }
+        return detail;
     }
 }

@@ -12,6 +12,7 @@ public record CaregiverProfileResponse(
         String firstName,
         String lastName,
         Set<Qualification> qualifications,
+        String otherQualificationDetail,
         BigDecimal hourlyRateMin,
         BigDecimal hourlyRateMax,
         Integer serviceRadiusMiles,

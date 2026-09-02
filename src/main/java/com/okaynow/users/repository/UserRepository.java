@@ -27,9 +27,13 @@ public interface UserRepository extends JpaRepository<User, UUID> {
             where (:role is null or u.role = :role)
               and (:status is null or u.status = :status)
               and lower(u.email) like lower(concat('%', :search, '%'))
+              and (:agencyId is null or exists (
+                  select 1 from AgencyStaff s
+                  where s.user.id = u.id and s.agency.id = :agencyId))
             """)
     Page<User> search(@Param("role") Role role,
                       @Param("status") UserStatus status,
                       @Param("search") String search,
+                      @Param("agencyId") UUID agencyId,
                       Pageable pageable);
 }

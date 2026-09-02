@@ -74,6 +74,15 @@ public class CaregiverController {
                 caregiverProfileService.uploadPhoto(currentUserId(authentication), file));
     }
 
+    @PostMapping(value = "/me/cv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('CAREGIVER')")
+    public ResponseEntity<CaregiverProfileResponse> uploadCv(
+            Authentication authentication,
+            @RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(
+                caregiverProfileService.uploadCv(currentUserId(authentication), file));
+    }
+
     @GetMapping("/me/roster-invites")
     @PreAuthorize("hasRole('CAREGIVER')")
     public ResponseEntity<List<AgencyRosterEntryResponse>> rosterInvites(Authentication authentication) {

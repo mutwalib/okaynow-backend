@@ -1,5 +1,6 @@
 package com.okaynow.admin.dto;
 
+import com.okaynow.agencies.domain.AgencyStaffRole;
 import com.okaynow.users.domain.Role;
 import com.okaynow.users.domain.UserStatus;
 
@@ -14,6 +15,10 @@ public record AdminUserResponse(
         UserStatus status,
         boolean emailVerified,
         String displayName,
+        UUID agencyId,
+        String agencySlug,
+        String agencyDisplayName,
+        AgencyStaffRole agencyStaffRole,
         Instant createdAt
 ) {
 }

@@ -63,4 +63,7 @@ public class AgencyCaregiver {
     private Instant invitedAt;
 
     private Instant respondedAt;
+
+    /** Set when status becomes {@link AgencyCaregiverStatus#REMOVED}. */
+    private Instant removedAt;
 }

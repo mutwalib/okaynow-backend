@@ -3,6 +3,9 @@ package com.okaynow.admin.service;
 import com.okaynow.admin.dto.AdminUserResponse;
 import com.okaynow.admin.dto.AdminUserReviewDetailResponse;
 import com.okaynow.admin.dto.CreateAdminRequest;
+import com.okaynow.agencies.domain.Agency;
+import com.okaynow.agencies.domain.AgencyStaff;
+import com.okaynow.agencies.repository.AgencyStaffRepository;
 import com.okaynow.audit.domain.AuditAction;
 import com.okaynow.audit.service.AuditLogService;
 import com.okaynow.common.dto.PagedResponse;
@@ -45,14 +48,15 @@ public class AdminUserService {
     private final FacilityProfileRepository facilityProfileRepository;
     private final OnboardingRequestRepository onboardingRequestRepository;
     private final CaregiverCredentialRepository caregiverCredentialRepository;
+    private final AgencyStaffRepository agencyStaffRepository;
     private final AuditLogService auditLogService;
 
     @Transactional(readOnly = true)
     public PagedResponse<AdminUserResponse> search(
-            Role role, UserStatus status, String search, Pageable pageable) {
+            Role role, UserStatus status, String search, UUID agencyId, Pageable pageable) {
         String normalizedSearch = search == null ? "" : search.trim();
         return PagedResponse.from(
-                userRepository.search(role, status, normalizedSearch, pageable)
+                userRepository.search(role, status, normalizedSearch, agencyId, pageable)
                         .map(this::toResponse));
     }
 
@@ -63,6 +67,7 @@ public class AdminUserService {
 
         AdminUserReviewDetailResponse.CaregiverReviewProfile caregiver = null;
         AdminUserReviewDetailResponse.ClientReviewProfile client = null;
+        AdminUserReviewDetailResponse.AgencyStaffReviewProfile agencyStaff = null;
         List<AdminUserReviewDetailResponse.CredentialSummary> credentials = List.of();
 
         if (user.getRole() == Role.CAREGIVER) {
@@ -106,6 +111,10 @@ public class AdminUserService {
                         profile.getMedicaidEligible(),
                         profile.getRelationshipToCareRecipient());
             }
+        } else if (user.getRole() == Role.AGENCY_ADMIN) {
+            agencyStaff = agencyStaffRepository.findFirstByUserIdWithAgency(userId)
+                    .map(this::toAgencyStaffReviewProfile)
+                    .orElse(null);
         }
 
         List<OnboardingRequest> requests =
@@ -130,6 +139,7 @@ public class AdminUserService {
                 submitted,
                 caregiver,
                 client,
+                agencyStaff,
                 credentials,
                 requests.stream().map(this::toKycSummary).toList());
     }
@@ -229,6 +239,11 @@ public class AdminUserService {
     }
 
     private AdminUserResponse toResponse(User user) {
+        AgencyStaff staff = null;
+        if (user.getRole() == Role.AGENCY_ADMIN) {
+            staff = agencyStaffRepository.findFirstByUserIdWithAgency(user.getId()).orElse(null);
+        }
+        Agency agency = staff == null ? null : staff.getAgency();
         return new AdminUserResponse(
                 user.getId(),
                 user.getEmail(),
@@ -237,10 +252,33 @@ public class AdminUserService {
                 user.getStatus(),
                 user.isEmailVerified(),
                 displayName(user),
+                agency == null ? null : agency.getId(),
+                agency == null ? null : agency.getSlug(),
+                agency == null ? null : agency.getDisplayName(),
+                staff == null ? null : staff.getRole(),
                 user.getCreatedAt());
     }
 
+    private AdminUserReviewDetailResponse.AgencyStaffReviewProfile toAgencyStaffReviewProfile(
+            AgencyStaff staff) {
+        Agency agency = staff.getAgency();
+        return new AdminUserReviewDetailResponse.AgencyStaffReviewProfile(
+                agency.getId(),
+                agency.getSlug(),
+                agency.getDisplayName(),
+                staff.getRole(),
+                agency.getSubscriptionStatus(),
+                agency.getSubscriptionPlan(),
+                agency.isDirectoryListed(),
+                agency.isHiringOpen());
+    }
+
     private String displayName(User user) {
+        if (user.getRole() == Role.AGENCY_ADMIN) {
+            return agencyStaffRepository.findFirstByUserIdWithAgency(user.getId())
+                    .map(staff -> staff.getAgency().getDisplayName() + " · " + user.getEmail())
+                    .orElse(user.getEmail());
+        }
         if (user.getRole() == Role.CAREGIVER) {
             return caregiverProfileRepository.findByUserId(user.getId())
                     .map(p -> (safe(p.getFirstName()) + " " + safe(p.getLastName())).trim())

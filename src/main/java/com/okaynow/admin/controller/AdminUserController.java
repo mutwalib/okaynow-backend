@@ -41,12 +41,14 @@ public class AdminUserController {
             @RequestParam(required = false) Role role,
             @RequestParam(required = false) UserStatus status,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) UUID agencyId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "25") int size) {
         return ResponseEntity.ok(adminUserService.search(
                 role,
                 status,
                 search,
+                agencyId,
                 PageRequest.of(page, Math.min(size, 100),
                         Sort.by(Sort.Direction.DESC, "createdAt"))));
     }

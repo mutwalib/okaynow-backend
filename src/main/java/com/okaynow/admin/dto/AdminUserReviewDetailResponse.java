@@ -1,5 +1,8 @@
 package com.okaynow.admin.dto;
 
+import com.okaynow.agencies.domain.AgencyStaffRole;
+import com.okaynow.agencies.domain.SubscriptionPlan;
+import com.okaynow.agencies.domain.SubscriptionStatus;
 import com.okaynow.onboarding.domain.OnboardingFieldType;
 import com.okaynow.onboarding.domain.OnboardingRequestStatus;
 import com.okaynow.users.domain.CareRecipientRelationship;
@@ -33,9 +36,21 @@ public record AdminUserReviewDetailResponse(
         long submittedKycRequests,
         CaregiverReviewProfile caregiver,
         ClientReviewProfile client,
+        AgencyStaffReviewProfile agencyStaff,
         List<CredentialSummary> credentials,
         List<KycRequestSummary> kycRequests
 ) {
+    public record AgencyStaffReviewProfile(
+            UUID agencyId,
+            String agencySlug,
+            String agencyDisplayName,
+            AgencyStaffRole staffRole,
+            SubscriptionStatus subscriptionStatus,
+            SubscriptionPlan subscriptionPlan,
+            boolean directoryListed,
+            boolean hiringOpen
+    ) {
+    }
     public record CaregiverReviewProfile(
             UUID profileId,
             String firstName,

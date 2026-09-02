@@ -263,7 +263,7 @@ public class AdminReportService {
         UserStatus status = parseEnum(raw.get("status"), UserStatus.class);
         String search = raw.getOrDefault("search", "");
         PagedResponse<AdminUserResponse> page = adminUserService.search(
-                role, status, search, PageRequest.of(0, EXPORT_SIZE));
+                role, status, search, null, PageRequest.of(0, EXPORT_SIZE));
 
         Map<String, String> filters = new LinkedHashMap<>();
         filters.put("Role", label(role));

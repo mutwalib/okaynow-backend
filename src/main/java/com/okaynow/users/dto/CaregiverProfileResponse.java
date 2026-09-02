@@ -3,6 +3,7 @@ package com.okaynow.users.dto;
 import com.okaynow.users.domain.Qualification;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 
@@ -23,6 +24,8 @@ public record CaregiverProfileResponse(
         Double homeLat,
         Double homeLng,
         String profilePhotoUrl,
+        String cvUrl,
+        Instant cvUploadedAt,
         BigDecimal ratingAvg,
         Integer ratingCount
 ) {

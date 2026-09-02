@@ -28,6 +28,7 @@ public class LocalFileStorageService {
         this.root = Path.of(uploadDir).toAbsolutePath().normalize();
         this.maxBytes = maxBytes;
         Files.createDirectories(this.root.resolve("profiles"));
+        Files.createDirectories(this.root.resolve("caregiver-cv"));
     }
 
     /** Stores a profile photo and returns a public relative URL path (e.g. /uploads/profiles/…). */
@@ -95,6 +96,39 @@ public class LocalFileStorageService {
             throw new BadRequestException("Could not save file");
         }
         return "/uploads/onboarding/" + filename;
+    }
+
+    /** Stores a caregiver CV/resume (PDF or image) and returns a public relative URL. */
+    public String storeCaregiverCv(UUID caregiverProfileId, MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BadRequestException("Choose a CV file to upload");
+        }
+        if (file.getSize() > maxBytes) {
+            throw new BadRequestException(
+                    "CV must be " + (maxBytes / (1024 * 1024)) + " MB or smaller");
+        }
+        String contentType = resolveContentType(file);
+        String name = file.getOriginalFilename() == null
+                ? ""
+                : file.getOriginalFilename().toLowerCase(Locale.US);
+        boolean pdf = "application/pdf".equals(contentType) || name.endsWith(".pdf");
+        boolean image = ALLOWED.contains(contentType);
+        if (!pdf && !image) {
+            throw new BadRequestException("Upload a PDF or image (JPEG, PNG, WebP)");
+        }
+        String ext = pdf ? "pdf" : switch (contentType) {
+            case "image/png" -> "png";
+            case "image/webp" -> "webp";
+            default -> "jpg";
+        };
+        String filename = caregiverProfileId + "-" + UUID.randomUUID() + "." + ext;
+        Path dest = root.resolve("caregiver-cv").resolve(filename);
+        try {
+            Files.copy(file.getInputStream(), dest, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            throw new BadRequestException("Could not save CV");
+        }
+        return "/uploads/caregiver-cv/" + filename;
     }
 
     private static String resolveContentType(MultipartFile file) {

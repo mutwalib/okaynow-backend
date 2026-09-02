@@ -7,7 +7,9 @@ import com.okaynow.agencies.domain.SubscriptionPlan;
 import com.okaynow.agencies.domain.SubscriptionStatus;
 import com.okaynow.agencies.dto.AgencyMeResponse;
 import com.okaynow.agencies.dto.AgencyPublicProfileResponse;
+import com.okaynow.agencies.dto.SuperAdminAgencyDetailResponse;
 import com.okaynow.agencies.dto.SuperAdminAgencyResponse;
+import com.okaynow.agencies.dto.SuperAdminAgencyStaffResponse;
 import com.okaynow.agencies.dto.SuperAdminUpdateSubscriptionRequest;
 import com.okaynow.agencies.dto.UpdateAgencyDirectoryProfileRequest;
 import com.okaynow.agencies.repository.AgencyRepository;
@@ -141,6 +143,18 @@ public class AgencyService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public SuperAdminAgencyDetailResponse getForSuperAdmin(UUID agencyId) {
+        Agency agency = agencyRepository.findById(agencyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Agency not found"));
+        List<SuperAdminAgencyStaffResponse> staff = agencyStaffRepository
+                .findByAgencyIdWithUsers(agencyId)
+                .stream()
+                .map(this::toSuperAdminStaffResponse)
+                .toList();
+        return toSuperAdminDetailResponse(agency, staff);
+    }
+
     @Transactional
     public SuperAdminAgencyResponse updateSubscriptionForSuperAdmin(
             UUID agencyId, SuperAdminUpdateSubscriptionRequest request) {
@@ -234,11 +248,52 @@ public class AgencyService {
                 agency.getId(),
                 agency.getSlug(),
                 agency.getDisplayName(),
+                agency.getCity(),
+                agency.getState(),
                 agency.getSubscriptionStatus(),
                 agency.getSubscriptionPlan(),
                 agency.isDirectoryListed(),
+                agency.isHiringOpen(),
+                agencyStaffRepository.countByAgencyId(agency.getId()),
                 agency.getSubscriptionPeriodEnd(),
                 agency.getCreatedAt());
+    }
+
+    private SuperAdminAgencyDetailResponse toSuperAdminDetailResponse(
+            Agency agency, List<SuperAdminAgencyStaffResponse> staff) {
+        return new SuperAdminAgencyDetailResponse(
+                agency.getId(),
+                agency.getSlug(),
+                agency.getLegalName(),
+                agency.getDisplayName(),
+                agency.getLicenseNumber(),
+                agency.getAddressLine(),
+                agency.getCity(),
+                agency.getState(),
+                agency.getZip(),
+                agency.getPublicDescription(),
+                new ArrayList<>(agency.getQualificationsSupported()),
+                agency.getSubscriptionStatus(),
+                agency.getSubscriptionPlan(),
+                agency.isDirectoryListed(),
+                agency.isHiringOpen(),
+                agency.getHiringNote(),
+                agency.getSubscriptionPeriodStart(),
+                agency.getSubscriptionPeriodEnd(),
+                agency.getCreatedAt(),
+                staff);
+    }
+
+    private SuperAdminAgencyStaffResponse toSuperAdminStaffResponse(AgencyStaff staff) {
+        User user = staff.getUser();
+        return new SuperAdminAgencyStaffResponse(
+                staff.getId(),
+                user.getId(),
+                user.getEmail(),
+                user.getEmail(),
+                user.getStatus(),
+                staff.getRole(),
+                staff.getCreatedAt());
     }
 
     private static String trimOrNull(String value) {

@@ -20,6 +20,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -81,6 +82,11 @@ public class CaregiverProfile {
 
     /** Public URL path for profile photo (e.g. /uploads/profiles/…). */
     private String profilePhotoUrl;
+
+    /** Resume / CV for agencies reviewing roster applicants (PDF or image). */
+    private String cvUrl;
+
+    private Instant cvUploadedAt;
 
     /** Average of published client reviews; null until first published review. */
     @Column(precision = 4, scale = 2)

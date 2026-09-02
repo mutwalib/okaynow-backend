@@ -22,5 +22,16 @@ public interface AgencyStaffRepository extends JpaRepository<AgencyStaff, UUID> 
 
     List<AgencyStaff> findByAgencyId(UUID agencyId);
 
+    @Query("""
+            SELECT s FROM AgencyStaff s
+            JOIN FETCH s.user u
+            JOIN FETCH s.agency a
+            WHERE a.id = :agencyId
+            ORDER BY s.createdAt ASC
+            """)
+    List<AgencyStaff> findByAgencyIdWithUsers(@Param("agencyId") UUID agencyId);
+
+    long countByAgencyId(UUID agencyId);
+
     boolean existsByAgencyIdAndUserId(UUID agencyId, UUID userId);
 }

@@ -8,6 +8,7 @@ import com.okaynow.common.exception.ResourceNotFoundException;
 import com.okaynow.roster.domain.AgencyCaregiver;
 import com.okaynow.roster.domain.AgencyCaregiverStatus;
 import com.okaynow.roster.dto.AgencyRosterEntryResponse;
+import com.okaynow.roster.dto.AgencyRosterMemberDetailResponse;
 import com.okaynow.roster.dto.CaregiverLookupResponse;
 import com.okaynow.roster.dto.InviteRosterCaregiverRequest;
 import com.okaynow.roster.repository.AgencyCaregiverRepository;
@@ -83,6 +84,17 @@ public class AgencyRosterService {
     }
 
     @Transactional(readOnly = true)
+    public AgencyRosterMemberDetailResponse getMemberDetail(UUID agencyUserId, UUID rosterId) {
+        Agency agency = agencyAccessService.requireAgencyForUser(agencyUserId);
+        AgencyCaregiver row = agencyCaregiverRepository.findById(rosterId)
+                .orElseThrow(() -> new ResourceNotFoundException("Roster entry not found"));
+        if (!row.getAgency().getId().equals(agency.getId())) {
+            throw new ResourceNotFoundException("Roster entry not found");
+        }
+        return toDetailResponse(row);
+    }
+
+    @Transactional(readOnly = true)
     public List<AgencyRosterEntryResponse> listInvitesForCaregiver(UUID caregiverUserId) {
         CaregiverProfile profile = caregiverProfileRepository.findByUserId(caregiverUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("Caregiver profile not found"));
@@ -119,6 +131,7 @@ public class AgencyRosterService {
             row.setStatus(AgencyCaregiverStatus.INVITED);
             row.setInviteMessage(trimOrNull(request.message()));
             row.setRespondedAt(null);
+            row.setRemovedAt(null);
             return toResponse(agencyCaregiverRepository.save(row));
         }
 
@@ -146,13 +159,43 @@ public class AgencyRosterService {
     }
 
     @Transactional
+    public AgencyRosterEntryResponse reactivate(UUID agencyUserId, UUID rosterId) {
+        Agency agency = agencyAccessService.requireAgencyForUser(agencyUserId);
+        agencyAccessService.assertAgencyAllowsWrites(agency);
+        AgencyCaregiver row = requireAgencyRosterRow(agency, rosterId);
+        if (row.getStatus() != AgencyCaregiverStatus.SUSPENDED) {
+            throw new BadRequestException("Only suspended roster members can be reactivated");
+        }
+        row.setStatus(AgencyCaregiverStatus.ACTIVE);
+        row.setRespondedAt(Instant.now());
+        row.setRemovedAt(null);
+        return toResponse(agencyCaregiverRepository.save(row));
+    }
+
+    @Transactional
+    public AgencyRosterEntryResponse remove(UUID agencyUserId, UUID rosterId) {
+        Agency agency = agencyAccessService.requireAgencyForUser(agencyUserId);
+        agencyAccessService.assertAgencyAllowsWrites(agency);
+        AgencyCaregiver row = requireAgencyRosterRow(agency, rosterId);
+        if (row.getStatus() == AgencyCaregiverStatus.REMOVED) {
+            throw new BadRequestException("This caregiver is already removed from the roster");
+        }
+        if (row.getStatus() == AgencyCaregiverStatus.INVITED) {
+            throw new BadRequestException("Cancel a pending invite instead of removing");
+        }
+        row.setStatus(AgencyCaregiverStatus.REMOVED);
+        row.setRemovedAt(Instant.now());
+        row.setRespondedAt(Instant.now());
+        return toResponse(agencyCaregiverRepository.save(row));
+    }
+
+    @Transactional
     public AgencyRosterEntryResponse suspend(UUID agencyUserId, UUID rosterId) {
         Agency agency = agencyAccessService.requireAgencyForUser(agencyUserId);
         agencyAccessService.assertAgencyAllowsWrites(agency);
-        AgencyCaregiver row = agencyCaregiverRepository.findById(rosterId)
-                .orElseThrow(() -> new ResourceNotFoundException("Roster entry not found"));
-        if (!row.getAgency().getId().equals(agency.getId())) {
-            throw new ResourceNotFoundException("Roster entry not found");
+        AgencyCaregiver row = requireAgencyRosterRow(agency, rosterId);
+        if (row.getStatus() != AgencyCaregiverStatus.ACTIVE) {
+            throw new BadRequestException("Only active roster members can be suspended");
         }
         row.setStatus(AgencyCaregiverStatus.SUSPENDED);
         row.setRespondedAt(Instant.now());
@@ -180,6 +223,48 @@ public class AgencyRosterService {
                 row.getInviteMessage(),
                 row.getInvitedAt(),
                 row.getRespondedAt());
+    }
+
+    private AgencyRosterMemberDetailResponse toDetailResponse(AgencyCaregiver row) {
+        CaregiverProfile cg = row.getCaregiverProfile();
+        User user = cg.getUser();
+        return new AgencyRosterMemberDetailResponse(
+                row.getId(),
+                row.getStatus(),
+                row.getInviteMessage(),
+                row.getInvitedAt(),
+                row.getRespondedAt(),
+                row.getRemovedAt(),
+                cg.getId(),
+                user.getId(),
+                cg.getFirstName(),
+                cg.getLastName(),
+                user.getEmail(),
+                user.getPhone(),
+                user.getStatus(),
+                new java.util.ArrayList<>(cg.getQualifications()),
+                cg.getOtherQualificationDetail(),
+                cg.getHourlyRateMin(),
+                cg.getHourlyRateMax(),
+                cg.getServiceRadiusMiles(),
+                cg.getHomeAddressLine(),
+                cg.getHomeCity(),
+                cg.getHomeState(),
+                cg.getHomeZip(),
+                cg.getProfilePhotoUrl(),
+                cg.getCvUrl(),
+                cg.getCvUploadedAt(),
+                cg.getRatingAvg(),
+                cg.getRatingCount());
+    }
+
+    private AgencyCaregiver requireAgencyRosterRow(Agency agency, UUID rosterId) {
+        AgencyCaregiver row = agencyCaregiverRepository.findById(rosterId)
+                .orElseThrow(() -> new ResourceNotFoundException("Roster entry not found"));
+        if (!row.getAgency().getId().equals(agency.getId())) {
+            throw new ResourceNotFoundException("Roster entry not found");
+        }
+        return row;
     }
 
     private static String trimOrNull(String value) {

@@ -217,6 +217,14 @@ public class CaregiverProfileService {
         return userMapper.toCaregiverProfileResponse(profile);
     }
 
+    @Transactional
+    public CaregiverProfileResponse uploadCv(UUID userId, MultipartFile file) {
+        CaregiverProfile profile = findByUserId(userId);
+        profile.setCvUrl(fileStorageService.storeCaregiverCv(profile.getId(), file));
+        profile.setCvUploadedAt(Instant.now());
+        return userMapper.toCaregiverProfileResponse(profile);
+    }
+
     private void triggerProfileReverification(
             User user,
             Set<Qualification> nextQuals,

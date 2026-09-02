@@ -24,6 +24,7 @@ import com.okaynow.payroll.dto.UpdateAgencySettingsRequest;
 import com.okaynow.payroll.service.AgencySettingsService;
 import com.okaynow.payroll.service.InvoiceService;
 import com.okaynow.roster.dto.AgencyRosterEntryResponse;
+import com.okaynow.roster.dto.AgencyRosterMemberDetailResponse;
 import com.okaynow.roster.dto.CaregiverLookupResponse;
 import com.okaynow.roster.dto.InviteRosterCaregiverRequest;
 import com.okaynow.roster.service.AgencyRosterService;
@@ -207,6 +208,14 @@ public class AgencyTenantController {
                 interestService.decline(currentUserId(authentication), interestId));
     }
 
+    @GetMapping("/roster/{rosterId}")
+    public ResponseEntity<AgencyRosterMemberDetailResponse> rosterMember(
+            Authentication authentication,
+            @PathVariable UUID rosterId) {
+        return ResponseEntity.ok(
+                agencyRosterService.getMemberDetail(currentUserId(authentication), rosterId));
+    }
+
     @PostMapping("/roster/invite")
     @ResponseStatus(HttpStatus.CREATED)
     public AgencyRosterEntryResponse inviteRoster(
@@ -221,6 +230,22 @@ public class AgencyTenantController {
             @PathVariable UUID rosterId) {
         return ResponseEntity.ok(
                 agencyRosterService.suspend(currentUserId(authentication), rosterId));
+    }
+
+    @PostMapping("/roster/{rosterId}/reactivate")
+    public ResponseEntity<AgencyRosterEntryResponse> reactivateRoster(
+            Authentication authentication,
+            @PathVariable UUID rosterId) {
+        return ResponseEntity.ok(
+                agencyRosterService.reactivate(currentUserId(authentication), rosterId));
+    }
+
+    @PostMapping("/roster/{rosterId}/remove")
+    public ResponseEntity<AgencyRosterEntryResponse> removeRoster(
+            Authentication authentication,
+            @PathVariable UUID rosterId) {
+        return ResponseEntity.ok(
+                agencyRosterService.remove(currentUserId(authentication), rosterId));
     }
 
     @GetMapping("/shift-requests")

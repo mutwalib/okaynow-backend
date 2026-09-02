@@ -1,5 +1,6 @@
 package com.okaynow.payroll.dto;
 
+import com.okaynow.agencies.domain.ShiftRoutingMode;
 import com.okaynow.payroll.domain.PayPeriodType;
 
 import java.math.BigDecimal;
@@ -13,6 +14,10 @@ public record AgencySettingsResponse(
         boolean autoInvoiceOnComplete,
         boolean autoInvoiceSendImmediately,
         BigDecimal clientCaregiverRejectionFee,
-        BigDecimal platformConversionFee
+        BigDecimal platformConversionFee,
+        ShiftRoutingMode shiftRoutingMode,
+        int maxIncompleteShiftsPerCaregiver,
+        int minBufferMinutesBetweenShifts,
+        int maxDriveMinutesBetweenShifts
 ) {
 }

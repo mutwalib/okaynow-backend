@@ -2,6 +2,8 @@ package com.okaynow.agencies.controller;
 
 import com.okaynow.agencies.dto.AgencyMeResponse;
 import com.okaynow.agencies.dto.AssignAgencyShiftRequest;
+import com.okaynow.agencies.dto.BroadcastAgencyShiftRequest;
+import com.okaynow.agencies.dto.BroadcastAgencyShiftResponse;
 import com.okaynow.agencies.dto.CheckoutSessionResponse;
 import com.okaynow.agencies.dto.ConnectOnboardingResponse;
 import com.okaynow.agencies.dto.ConnectStatusResponse;
@@ -282,6 +284,18 @@ public class AgencyTenantController {
             @Valid @RequestBody AssignAgencyShiftRequest request) {
         return ResponseEntity.ok(
                 agencyShiftService.assign(currentUserId(authentication), shiftId, request));
+    }
+
+    @PostMapping("/shifts/{shiftId}/broadcast")
+    public ResponseEntity<BroadcastAgencyShiftResponse> broadcastShift(
+            Authentication authentication,
+            @PathVariable UUID shiftId,
+            @RequestBody(required = false) BroadcastAgencyShiftRequest request) {
+        BroadcastAgencyShiftRequest body = request != null
+                ? request
+                : new BroadcastAgencyShiftRequest(List.of());
+        return ResponseEntity.ok(
+                agencyShiftService.broadcast(currentUserId(authentication), shiftId, body));
     }
 
     private UUID currentUserId(Authentication authentication) {

@@ -1,6 +1,9 @@
 package com.okaynow.agencies.service;
 
 import com.okaynow.agencies.dto.AssignAgencyShiftRequest;
+import com.okaynow.agencies.dto.BroadcastAgencyShiftRequest;
+import com.okaynow.agencies.dto.BroadcastAgencyShiftResponse;
+import com.okaynow.agencies.service.AgencyShiftRoutingService;
 import com.okaynow.agencies.support.AgencyAccessService;
 import com.okaynow.booking.dto.ShiftClaimResponse;
 import com.okaynow.booking.service.BookingService;
@@ -32,6 +35,7 @@ public class AgencyShiftService {
     private final BookingService bookingService;
     private final AgencyRosterService agencyRosterService;
     private final UserRepository userRepository;
+    private final AgencyShiftRoutingService agencyShiftRoutingService;
 
     @Transactional(readOnly = true)
     public List<ShiftResponse> listForAgency(UUID agencyUserId) {
@@ -62,5 +66,11 @@ public class AgencyShiftService {
             shiftRepository.save(updated);
         }
         return claim;
+    }
+
+    @Transactional
+    public BroadcastAgencyShiftResponse broadcast(
+            UUID agencyUserId, UUID shiftId, BroadcastAgencyShiftRequest request) {
+        return agencyShiftRoutingService.broadcast(agencyUserId, shiftId, request);
     }
 }

@@ -148,4 +148,22 @@ public interface ShiftClaimRepository extends JpaRepository<ShiftClaim, UUID> {
     List<Object[]> countCompletedByCaregiverForFacility(
             @Param("facilityProfileId") UUID facilityProfileId,
             @Param("completed") ShiftClaimStatus completed);
+
+    @Query("""
+            select count(c) from ShiftClaim c
+            where c.caregiverProfile.id = :caregiverProfileId
+              and c.status in :statuses
+              and c.shift.agencyId = :agencyId
+              and c.shift.status not in (
+                com.okaynow.shifts.domain.ShiftStatus.COMPLETED,
+                com.okaynow.shifts.domain.ShiftStatus.CANCELLED,
+                com.okaynow.shifts.domain.ShiftStatus.NO_SHOW
+              )
+              and c.shift.id <> :excludeShiftId
+            """)
+    long countIncompleteForAgency(
+            @Param("caregiverProfileId") UUID caregiverProfileId,
+            @Param("agencyId") UUID agencyId,
+            @Param("excludeShiftId") UUID excludeShiftId,
+            @Param("statuses") Collection<ShiftClaimStatus> statuses);
 }

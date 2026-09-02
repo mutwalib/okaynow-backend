@@ -54,6 +54,10 @@ public class AgencySettingsService {
                             .autoInvoiceSendImmediately(seed.isAutoInvoiceSendImmediately())
                             .clientCaregiverRejectionFee(seed.getClientCaregiverRejectionFee())
                             .platformConversionFee(seed.getPlatformConversionFee())
+                            .shiftRoutingMode(seed.getShiftRoutingMode())
+                            .maxIncompleteShiftsPerCaregiver(seed.getMaxIncompleteShiftsPerCaregiver())
+                            .minBufferMinutesBetweenShifts(seed.getMinBufferMinutesBetweenShifts())
+                            .maxDriveMinutesBetweenShifts(seed.getMaxDriveMinutesBetweenShifts())
                             .build();
                     return agencySettingsRepository.save(created);
                 }));
@@ -100,6 +104,10 @@ public class AgencySettingsService {
                 request.clientCaregiverRejectionFee().setScale(2, RoundingMode.HALF_UP));
         settings.setPlatformConversionFee(
                 request.platformConversionFee().setScale(2, RoundingMode.HALF_UP));
+        settings.setShiftRoutingMode(request.shiftRoutingMode());
+        settings.setMaxIncompleteShiftsPerCaregiver(request.maxIncompleteShiftsPerCaregiver());
+        settings.setMinBufferMinutesBetweenShifts(request.minBufferMinutesBetweenShifts());
+        settings.setMaxDriveMinutesBetweenShifts(request.maxDriveMinutesBetweenShifts());
         return toResponse(agencySettingsRepository.save(settings));
     }
 
@@ -132,6 +140,10 @@ public class AgencySettingsService {
             settings.setPlatformConversionFee(new BigDecimal("500.00"));
             dirty = true;
         }
+        if (settings.getShiftRoutingMode() == null) {
+            settings.setShiftRoutingMode(com.okaynow.agencies.domain.ShiftRoutingMode.INBOX_FIRST);
+            dirty = true;
+        }
         if (dirty) {
             settings = agencySettingsRepository.save(settings);
         }
@@ -162,6 +174,10 @@ public class AgencySettingsService {
                         : BigDecimal.ZERO,
                 settings.getPlatformConversionFee() != null
                         ? settings.getPlatformConversionFee()
-                        : BigDecimal.ZERO);
+                        : BigDecimal.ZERO,
+                settings.getShiftRoutingMode(),
+                settings.getMaxIncompleteShiftsPerCaregiver(),
+                settings.getMinBufferMinutesBetweenShifts(),
+                settings.getMaxDriveMinutesBetweenShifts());
     }
 }

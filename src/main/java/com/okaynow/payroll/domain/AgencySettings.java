@@ -1,5 +1,6 @@
 package com.okaynow.payroll.domain;
 
+import com.okaynow.agencies.domain.ShiftRoutingMode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -104,6 +105,30 @@ public class AgencySettings {
     @Column(nullable = false, precision = 10, scale = 2, columnDefinition = "numeric(10,2) default 500.00")
     @Builder.Default
     private BigDecimal platformConversionFee = new BigDecimal("500.00");
+
+    /** How accepted home requests are routed to caregivers. */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 24)
+    @Builder.Default
+    private ShiftRoutingMode shiftRoutingMode = ShiftRoutingMode.INBOX_FIRST;
+
+    /**
+     * Max open shifts (pending or confirmed, not completed) per caregiver at once.
+     * Zero means no limit.
+     */
+    @Column(nullable = false, columnDefinition = "integer default 3")
+    @Builder.Default
+    private int maxIncompleteShiftsPerCaregiver = 3;
+
+    /** Extra minutes required between consecutive shifts at different homes. */
+    @Column(nullable = false, columnDefinition = "integer default 15")
+    @Builder.Default
+    private int minBufferMinutesBetweenShifts = 15;
+
+    /** Reject assignments when drive time between different homes exceeds this. Zero disables. */
+    @Column(nullable = false, columnDefinition = "integer default 45")
+    @Builder.Default
+    private int maxDriveMinutesBetweenShifts = 45;
 
     public BigDecimal suggestedPayRate(BigDecimal billRate) {
         if (billRate == null) {

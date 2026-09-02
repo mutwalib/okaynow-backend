@@ -129,4 +129,17 @@ public interface ShiftRepository extends JpaRepository<Shift, UUID>, JpaSpecific
     List<Shift> findOpenUnfilledFrom(@Param("fromDate") LocalDate fromDate);
 
     List<Shift> findByAgencyIdOrderByDateDescStartTimeDesc(UUID agencyId);
+
+    @Query("""
+            select s from Shift s
+            where s.agencyId in :agencyIds
+              and s.status = com.okaynow.shifts.domain.ShiftStatus.OPEN
+              and s.marketplacePosted = true
+              and s.marketplaceSlots > 0
+              and s.date >= :fromDate
+            order by s.date asc, s.startTime asc
+            """)
+    List<Shift> findOpenRosterBroadcastForAgencies(
+            @Param("agencyIds") java.util.Collection<UUID> agencyIds,
+            @Param("fromDate") LocalDate fromDate);
 }

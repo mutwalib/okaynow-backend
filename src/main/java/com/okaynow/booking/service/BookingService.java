@@ -1,5 +1,6 @@
 package com.okaynow.booking.service;
 
+import com.okaynow.agencies.service.CaregiverStaffingConstraintService;
 import com.okaynow.audit.domain.AuditAction;
 import com.okaynow.audit.service.AuditLogService;
 import com.okaynow.booking.domain.ClaimSource;
@@ -26,6 +27,8 @@ import com.okaynow.payroll.dto.ClientInvoiceResponse;
 import com.okaynow.payroll.service.AgencySettingsService;
 import com.okaynow.payroll.service.InvoiceService;
 import com.okaynow.payroll.service.SettlementService;
+import com.okaynow.roster.domain.AgencyCaregiverStatus;
+import com.okaynow.roster.repository.AgencyCaregiverRepository;
 import com.okaynow.staffing.service.ClientStaffingService;
 import com.okaynow.shifts.domain.Shift;
 import com.okaynow.shifts.domain.ShiftStatus;
@@ -85,6 +88,8 @@ public class BookingService {
     private final MarketplaceEligibilityService marketplaceEligibilityService;
     private final QualificationRulePackService qualificationRulePackService;
     private final DriveTimeService driveTimeService;
+    private final CaregiverStaffingConstraintService staffingConstraintService;
+    private final AgencyCaregiverRepository agencyCaregiverRepository;
 
     /**
      * Caregiver claims an OPEN shift. Pessimistic locks are taken on the caregiver profile
@@ -144,6 +149,54 @@ public class BookingService {
     }
 
     /**
+     * Roster caregiver picks an agency-open shift (tenant board, not global marketplace).
+     */
+    @Transactional
+    public ShiftClaimResponse claimAgencyRosterShift(UUID shiftId, String caregiverEmail) {
+        CaregiverProfile caregiver = lockCaregiverByEmail(caregiverEmail);
+        Shift shift = lockShift(shiftId);
+
+        if (shift.getAgencyId() == null) {
+            throw new ConflictException("This is not an agency roster shift");
+        }
+        if (shift.getStatus() != ShiftStatus.OPEN || !shift.isMarketplacePosted()) {
+            throw new ConflictException("This shift is not open for roster caregivers");
+        }
+        if (shift.getDate() != null && shift.getDate().isBefore(LocalDate.now(ShiftWindows.ZONE))) {
+            throw new BadRequestException("Cannot claim a shift on a past date");
+        }
+        if (shift.getMarketplaceSlots() < 1) {
+            throw new ConflictException("No open slots remain on this shift");
+        }
+        assertActiveOnAgencyRoster(shift.getAgencyId(), caregiver.getId());
+        if (shiftClaimRepository.findFirstByShiftIdAndCaregiverProfileIdAndStatusIn(
+                shiftId, caregiver.getId(), ACTIVE_CLAIM_STATUSES).isPresent()) {
+            throw new ConflictException("You already have an active claim on this shift");
+        }
+        marketplaceEligibilityService.assertCanClaim(caregiver, shift);
+        assertNoOverlappingClaim(caregiver.getId(), shift);
+        staffingConstraintService.assertAgencyStaffingRules(shift.getAgencyId(), caregiver.getId(), shift);
+
+        ShiftClaim claim = ShiftClaim.builder()
+                .shift(shift)
+                .caregiverProfile(caregiver)
+                .status(ShiftClaimStatus.CONFIRMED)
+                .source(ClaimSource.ROSTER_OPEN)
+                .build();
+        attachTravelEconomics(claim, caregiver, shift);
+        shiftClaimRepository.save(claim);
+        refreshShiftFill(shift);
+        shiftEventPublisher.publish(
+                NotificationType.SHIFT_CLAIMED,
+                shift,
+                caregiver.getUser().getId(),
+                "Shift claimed",
+                caregiver.getFirstName() + " " + caregiver.getLastName()
+                        + " picked up the " + shift.getDate() + " shift.");
+        return toResponse(claim, true);
+    }
+
+    /**
      * Agency assigns a caregiver without requiring a marketplace claim.
      * From DRAFT or HELD: private assignment (not visible on the open board).
      * From OPEN: fills a slot; stays open until all slots are filled.
@@ -178,6 +231,10 @@ public class BookingService {
         }
         marketplaceEligibilityService.assertCanAssign(caregiver, shift);
         assertNoOverlappingClaim(caregiver.getId(), shift);
+        if (shift.getAgencyId() != null) {
+            staffingConstraintService.assertAgencyStaffingRules(
+                    shift.getAgencyId(), caregiver.getId(), shift);
+        }
 
         ShiftClaim claim = ShiftClaim.builder()
                 .shift(shift)
@@ -239,6 +296,10 @@ public class BookingService {
         marketplaceEligibilityService.assertCanClaim(caregiver, shift);
         try {
             assertNoOverlappingClaim(caregiver.getId(), shift);
+            if (shift.getAgencyId() != null) {
+                staffingConstraintService.assertAgencyStaffingRules(
+                        shift.getAgencyId(), caregiver.getId(), shift);
+            }
         } catch (ConflictException overlap) {
             notifyInviteFailed(shift, caregiver, overlap.getMessage());
             throw overlap;
@@ -289,6 +350,10 @@ public class BookingService {
         }
         try {
             assertNoOverlappingClaim(caregiver.getId(), shift);
+            if (shift.getAgencyId() != null) {
+                staffingConstraintService.assertAgencyStaffingRules(
+                        shift.getAgencyId(), caregiver.getId(), shift);
+            }
         } catch (ConflictException overlap) {
             claim.setStatus(ShiftClaimStatus.CANCELLED);
             claim.setReleasedAt(Instant.now());
@@ -1285,6 +1350,13 @@ public class BookingService {
                         "Caregiver already has an active claim overlapping this shift's time window");
             }
         }
+    }
+
+    private void assertActiveOnAgencyRoster(UUID agencyId, UUID caregiverProfileId) {
+        agencyCaregiverRepository.findByAgencyIdAndCaregiverProfileId(agencyId, caregiverProfileId)
+                .filter(r -> r.getStatus() == AgencyCaregiverStatus.ACTIVE)
+                .orElseThrow(() -> new ConflictException(
+                        "You must be on this agency's active roster to pick up shifts"));
     }
 
     private int requiredHeadcount(Shift shift) {

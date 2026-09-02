@@ -3,6 +3,7 @@ package com.okaynow.shiftrequests.service;
 import com.okaynow.agencies.domain.Agency;
 import com.okaynow.agencies.repository.AgencyRepository;
 import com.okaynow.agencies.support.AgencyAccessService;
+import com.okaynow.agencies.service.AgencyShiftRoutingService;
 import com.okaynow.common.exception.BadRequestException;
 import com.okaynow.common.exception.ResourceNotFoundException;
 import com.okaynow.common.geo.GeocodingService;
@@ -54,6 +55,7 @@ public class ShiftRequestService {
     private final GeocodingService geocodingService;
     private final AgencySettingsService agencySettingsService;
     private final ShiftRepository shiftRepository;
+    private final AgencyShiftRoutingService agencyShiftRoutingService;
 
     @Transactional
     public ShiftRequestResponse createForHome(UUID homeUserId, CreateShiftRequestPayload payload) {
@@ -194,6 +196,8 @@ public class ShiftRequestService {
                     shift.setLng(point.lng());
                 });
         Shift savedShift = shiftRepository.save(shift);
+
+        agencyShiftRoutingService.routeAfterHomeRequestAccepted(agency.getId(), savedShift);
 
         row.setStatus(ShiftRequestAgencyStatus.ACCEPTED);
         row.setRespondedAt(Instant.now());

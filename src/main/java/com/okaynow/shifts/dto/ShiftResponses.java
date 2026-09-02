@@ -22,7 +22,7 @@ public final class ShiftResponses {
                     null,
                     false);
         }
-        if (role == Role.CLIENT || role == Role.FACILITY) {
+        if (role == Role.CLIENT || role == Role.FACILITY || role == Role.AGENCY_ADMIN) {
             return copy(
                     raw,
                     null,

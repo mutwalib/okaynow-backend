@@ -127,4 +127,6 @@ public interface ShiftRepository extends JpaRepository<Shift, UUID>, JpaSpecific
             order by s.date asc, s.startTime asc
             """)
     List<Shift> findOpenUnfilledFrom(@Param("fromDate") LocalDate fromDate);
+
+    List<Shift> findByAgencyIdOrderByDateDescStartTimeDesc(UUID agencyId);
 }

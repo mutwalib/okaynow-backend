@@ -98,6 +98,11 @@ public class BookingService {
         assertActiveForNewMarketplaceClaim(caregiver);
         Shift shift = lockShift(shiftId);
 
+        if (shift.getAgencyId() != null) {
+            throw new ConflictException(
+                    "Agency-managed shifts are assigned from the agency roster, not the open marketplace");
+        }
+
         if (shift.getStatus() != ShiftStatus.OPEN) {
             throw new ConflictException("Shift is not open for claiming");
         }

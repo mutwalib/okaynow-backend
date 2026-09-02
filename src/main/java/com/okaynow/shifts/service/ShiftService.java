@@ -615,6 +615,7 @@ public class ShiftService {
         if (caregiverJurisdiction != null) {
             CaregiverProfile caregiver = caregiverJurisdiction;
             List<Shift> filtered = page.getContent().stream()
+                    .filter(shift -> shift.getAgencyId() == null)
                     .filter(shift -> marketplaceEligibilityService.isEligible(caregiver, shift))
                     .toList();
             page = new PageImpl<>(filtered, pageable, filtered.size());

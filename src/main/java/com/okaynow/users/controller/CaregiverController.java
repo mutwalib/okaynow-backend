@@ -1,5 +1,7 @@
 package com.okaynow.users.controller;
 
+import com.okaynow.roster.dto.AgencyRosterEntryResponse;
+import com.okaynow.roster.service.AgencyRosterService;
 import com.okaynow.users.dto.AddCaregiverQualificationsRequest;
 import com.okaynow.users.dto.CaregiverProfileResponse;
 import com.okaynow.users.dto.UpdateCaregiverProfileRequest;
@@ -7,19 +9,23 @@ import com.okaynow.users.service.CaregiverProfileService;
 import com.okaynow.users.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -28,6 +34,7 @@ import java.util.UUID;
 public class CaregiverController {
 
     private final CaregiverProfileService caregiverProfileService;
+    private final AgencyRosterService agencyRosterService;
     private final UserService userService;
 
     @GetMapping("/me")
@@ -61,6 +68,20 @@ public class CaregiverController {
             @RequestParam("file") MultipartFile file) {
         return ResponseEntity.ok(
                 caregiverProfileService.uploadPhoto(currentUserId(authentication), file));
+    }
+
+    @GetMapping("/me/roster-invites")
+    @PreAuthorize("hasRole('CAREGIVER')")
+    public ResponseEntity<List<AgencyRosterEntryResponse>> rosterInvites(Authentication authentication) {
+        return ResponseEntity.ok(agencyRosterService.listInvitesForCaregiver(currentUserId(authentication)));
+    }
+
+    @PostMapping("/me/roster-invites/{id}/accept")
+    @PreAuthorize("hasRole('CAREGIVER')")
+    public ResponseEntity<AgencyRosterEntryResponse> acceptRosterInvite(
+            Authentication authentication,
+            @PathVariable UUID id) {
+        return ResponseEntity.ok(agencyRosterService.acceptInvite(currentUserId(authentication), id));
     }
 
     private UUID currentUserId(Authentication authentication) {

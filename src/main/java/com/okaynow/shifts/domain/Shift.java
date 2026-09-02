@@ -165,6 +165,14 @@ public class Shift {
     @Column(name = "created_by", nullable = false)
     private UUID createdBy;
 
+    /** Tenant agency that owns this shift (null = legacy marketplace shift). */
+    @Column(name = "agency_id")
+    private UUID agencyId;
+
+    /** Home-initiated need that produced this shift, when applicable. */
+    @Column(name = "shift_request_id")
+    private UUID shiftRequestId;
+
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private Instant createdAt;

@@ -28,6 +28,8 @@ public record AgencyMeResponse(
         Instant subscriptionPeriodStart,
         Instant subscriptionPeriodEnd,
         boolean directoryListed,
+        boolean hiringOpen,
+        String hiringNote,
         boolean stripeConfigured,
         boolean stripeConnectReady,
         boolean subscriptionAllowsWrites

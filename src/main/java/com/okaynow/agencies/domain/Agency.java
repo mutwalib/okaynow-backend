@@ -115,6 +115,15 @@ public class Agency {
     @Builder.Default
     private boolean directoryListed = false;
 
+    /** When true, caregivers can express interest / apply to join this agency's roster. */
+    @Column(nullable = false, columnDefinition = "boolean not null default false")
+    @Builder.Default
+    private boolean hiringOpen = false;
+
+    /** Short note shown to caregivers when hiring is open. */
+    @Column(length = 1000)
+    private String hiringNote;
+
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private Instant createdAt;

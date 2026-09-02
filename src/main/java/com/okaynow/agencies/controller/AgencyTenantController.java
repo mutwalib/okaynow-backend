@@ -16,12 +16,15 @@ import com.okaynow.agencies.support.AgencyAccessService;
 import com.okaynow.booking.dto.ShiftClaimResponse;
 import com.okaynow.connections.dto.HomeAgencyConnectionResponse;
 import com.okaynow.connections.service.HomeAgencyConnectionService;
+import com.okaynow.hiring.dto.CaregiverAgencyInterestResponse;
+import com.okaynow.hiring.service.CaregiverAgencyInterestService;
 import com.okaynow.payroll.dto.ClientInvoiceResponse;
 import com.okaynow.payroll.dto.AgencySettingsResponse;
 import com.okaynow.payroll.dto.UpdateAgencySettingsRequest;
 import com.okaynow.payroll.service.AgencySettingsService;
 import com.okaynow.payroll.service.InvoiceService;
 import com.okaynow.roster.dto.AgencyRosterEntryResponse;
+import com.okaynow.roster.dto.CaregiverLookupResponse;
 import com.okaynow.roster.dto.InviteRosterCaregiverRequest;
 import com.okaynow.roster.service.AgencyRosterService;
 import com.okaynow.shiftrequests.dto.AgencyShiftRequestInboxResponse;
@@ -67,6 +70,7 @@ public class AgencyTenantController {
     private final AgencyAccessService agencyAccessService;
     private final AgencyHoursExportService agencyHoursExportService;
     private final InvoiceService invoiceService;
+    private final CaregiverAgencyInterestService interestService;
     private final AgencyRosterService agencyRosterService;
     private final ShiftRequestService shiftRequestService;
     private final AgencyShiftService agencyShiftService;
@@ -171,6 +175,36 @@ public class AgencyTenantController {
     @GetMapping("/roster")
     public ResponseEntity<List<AgencyRosterEntryResponse>> roster(Authentication authentication) {
         return ResponseEntity.ok(agencyRosterService.listForAgency(currentUserId(authentication)));
+    }
+
+    @GetMapping("/caregivers/lookup")
+    public ResponseEntity<CaregiverLookupResponse> lookupCaregiver(
+            Authentication authentication,
+            @RequestParam String email) {
+        return ResponseEntity.ok(
+                agencyRosterService.lookupByEmail(currentUserId(authentication), email));
+    }
+
+    @GetMapping("/caregiver-interests")
+    public ResponseEntity<List<CaregiverAgencyInterestResponse>> caregiverInterests(
+            Authentication authentication) {
+        return ResponseEntity.ok(interestService.listForAgency(currentUserId(authentication)));
+    }
+
+    @PostMapping("/caregiver-interests/{interestId}/accept")
+    public ResponseEntity<CaregiverAgencyInterestResponse> acceptInterest(
+            Authentication authentication,
+            @PathVariable UUID interestId) {
+        return ResponseEntity.ok(
+                interestService.accept(currentUserId(authentication), interestId));
+    }
+
+    @PostMapping("/caregiver-interests/{interestId}/decline")
+    public ResponseEntity<CaregiverAgencyInterestResponse> declineInterest(
+            Authentication authentication,
+            @PathVariable UUID interestId) {
+        return ResponseEntity.ok(
+                interestService.decline(currentUserId(authentication), interestId));
     }
 
     @PostMapping("/roster/invite")

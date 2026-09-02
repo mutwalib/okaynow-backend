@@ -23,13 +23,37 @@ public class AgencyDirectoryService {
 
     @Transactional(readOnly = true)
     public List<AgencyDirectoryEntryResponse> search(
-            Double lat, Double lng, Integer radiusMiles, Qualification qualification) {
+            Double lat,
+            Double lng,
+            Integer radiusMiles,
+            Qualification qualification,
+            String city,
+            String zip,
+            Boolean hiringOnly) {
         List<Agency> listed = agencyRepository.findDirectoryListed();
         List<AgencyDirectoryEntryResponse> results = new ArrayList<>();
+        String cityFilter = city == null ? null : city.trim().toLowerCase();
+        String zipFilter = zip == null ? null : zip.trim().replaceAll("[^0-9]", "");
         for (Agency agency : listed) {
+            if (Boolean.TRUE.equals(hiringOnly) && !agency.isHiringOpen()) {
+                continue;
+            }
             if (qualification != null
                     && !agency.getQualificationsSupported().contains(qualification)) {
                 continue;
+            }
+            if (cityFilter != null && !cityFilter.isEmpty()) {
+                String agencyCity = agency.getCity() == null ? "" : agency.getCity().toLowerCase();
+                if (!agencyCity.contains(cityFilter)) {
+                    continue;
+                }
+            }
+            if (zipFilter != null && !zipFilter.isEmpty()) {
+                String agencyZip = agency.getZip() == null ? "" : agency.getZip().replaceAll("[^0-9]", "");
+                if (agencyZip.isEmpty()
+                        || !(agencyZip.startsWith(zipFilter) || zipFilter.startsWith(agencyZip))) {
+                    continue;
+                }
             }
             Double distance = null;
             if (lat != null && lng != null && agency.getLat() != null && agency.getLng() != null) {
@@ -47,12 +71,15 @@ public class AgencyDirectoryService {
                     agency.getDisplayName(),
                     agency.getCity(),
                     agency.getState(),
+                    agency.getZip(),
                     agency.getLat(),
                     agency.getLng(),
                     distance,
                     agency.getSubscriptionPlan(),
                     new ArrayList<>(agency.getQualificationsSupported()),
-                    snippet(agency.getPublicDescription())));
+                    snippet(agency.getPublicDescription()),
+                    agency.isHiringOpen(),
+                    agency.getHiringNote()));
         }
         results.sort(Comparator
                 .comparing((AgencyDirectoryEntryResponse e) ->

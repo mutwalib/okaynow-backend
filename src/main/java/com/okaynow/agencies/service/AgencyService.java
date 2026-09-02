@@ -123,6 +123,12 @@ public class AgencyService {
         if (request.directoryListed() != null) {
             agency.setDirectoryListed(request.directoryListed());
         }
+        if (request.hiringOpen() != null) {
+            agency.setHiringOpen(request.hiringOpen());
+        }
+        if (request.hiringNote() != null) {
+            agency.setHiringNote(request.hiringNote().isBlank() ? null : request.hiringNote().trim());
+        }
         geocodeAgency(agency);
         return toMeResponse(agencyRepository.save(agency));
     }
@@ -191,6 +197,8 @@ public class AgencyService {
                 agency.getSubscriptionPeriodStart(),
                 agency.getSubscriptionPeriodEnd(),
                 agency.isDirectoryListed(),
+                agency.isHiringOpen(),
+                agency.getHiringNote(),
                 stripeBillingService.isConfigured(),
                 agency.getStripeConnectAccountId() != null
                         && agency.isStripeConnectChargesEnabled()
@@ -216,7 +224,9 @@ public class AgencyService {
                 new ArrayList<>(agency.getQualificationsSupported()),
                 agency.getSubscriptionPlan(),
                 agency.getSubscriptionStatus(),
-                agency.isDirectoryListed());
+                agency.isDirectoryListed(),
+                agency.isHiringOpen(),
+                agency.getHiringNote());
     }
 
     private SuperAdminAgencyResponse toSuperAdminResponse(Agency agency) {

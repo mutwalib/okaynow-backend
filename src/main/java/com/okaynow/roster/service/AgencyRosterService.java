@@ -8,6 +8,7 @@ import com.okaynow.common.exception.ResourceNotFoundException;
 import com.okaynow.roster.domain.AgencyCaregiver;
 import com.okaynow.roster.domain.AgencyCaregiverStatus;
 import com.okaynow.roster.dto.AgencyRosterEntryResponse;
+import com.okaynow.roster.dto.CaregiverLookupResponse;
 import com.okaynow.roster.dto.InviteRosterCaregiverRequest;
 import com.okaynow.roster.repository.AgencyCaregiverRepository;
 import com.okaynow.users.domain.CaregiverProfile;
@@ -38,6 +39,47 @@ public class AgencyRosterService {
         return agencyCaregiverRepository.findByAgencyIdOrderByInvitedAtDesc(agency.getId()).stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<AgencyRosterEntryResponse> listMembershipsForCaregiver(UUID caregiverUserId) {
+        CaregiverProfile profile = caregiverProfileRepository.findByUserId(caregiverUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("Caregiver profile not found"));
+        return agencyCaregiverRepository.findByCaregiverProfileIdOrderByInvitedAtDesc(profile.getId()).stream()
+                .filter(r -> r.getStatus() == AgencyCaregiverStatus.ACTIVE
+                        || r.getStatus() == AgencyCaregiverStatus.SUSPENDED
+                        || r.getStatus() == AgencyCaregiverStatus.INVITED)
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public CaregiverLookupResponse lookupByEmail(UUID agencyUserId, String email) {
+        agencyAccessService.requireAgencyForUser(agencyUserId);
+        if (email == null || email.isBlank()) {
+            throw new BadRequestException("Email is required");
+        }
+        User caregiverUser = userRepository.findByEmail(email.trim().toLowerCase())
+                .orElseThrow(() -> new ResourceNotFoundException("No caregiver found for that email"));
+        if (caregiverUser.getRole() != Role.CAREGIVER) {
+            throw new BadRequestException("That account is not a caregiver profile");
+        }
+        CaregiverProfile profile = caregiverProfileRepository.findByUserId(caregiverUser.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Caregiver profile not found"));
+        Agency agency = agencyAccessService.requireAgencyForUser(agencyUserId);
+        var roster = agencyCaregiverRepository.findByAgencyIdAndCaregiverProfileId(
+                agency.getId(), profile.getId());
+        return new CaregiverLookupResponse(
+                profile.getId(),
+                profile.getFirstName(),
+                profile.getLastName(),
+                caregiverUser.getEmail(),
+                new java.util.ArrayList<>(profile.getQualifications()),
+                profile.getHomeCity(),
+                profile.getHomeState(),
+                profile.getServiceRadiusMiles(),
+                roster.isPresent(),
+                roster.map(r -> r.getStatus().name()).orElse(null));
     }
 
     @Transactional(readOnly = true)

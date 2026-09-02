@@ -99,6 +99,15 @@ public class PendingReviewAccessFilter extends OncePerRequestFilter {
         if (path.startsWith("/api/caregivers/me/roster-invites")) {
             return true;
         }
+        if (path.startsWith("/api/caregivers/me/rosters") && "GET".equalsIgnoreCase(method)) {
+            return true;
+        }
+        if (path.startsWith("/api/caregivers/me/agency-interests")) {
+            return true;
+        }
+        if (path.startsWith("/api/agencies/directory") && "GET".equalsIgnoreCase(method)) {
+            return true;
+        }
         if ("/api/clients/me".equals(path)
                 && ("GET".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method))) {
             return true;

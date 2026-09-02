@@ -28,8 +28,12 @@ public class AgencyDirectoryController {
             @RequestParam(required = false) Double lat,
             @RequestParam(required = false) Double lng,
             @RequestParam(required = false) Integer radius,
-            @RequestParam(required = false) Qualification qualification) {
-        return ResponseEntity.ok(agencyDirectoryService.search(lat, lng, radius, qualification));
+            @RequestParam(required = false) Qualification qualification,
+            @RequestParam(required = false) String city,
+            @RequestParam(required = false) String zip,
+            @RequestParam(required = false) Boolean hiringOnly) {
+        return ResponseEntity.ok(agencyDirectoryService.search(
+                lat, lng, radius, qualification, city, zip, hiringOnly));
     }
 
     @GetMapping("/{slug}/public-profile")

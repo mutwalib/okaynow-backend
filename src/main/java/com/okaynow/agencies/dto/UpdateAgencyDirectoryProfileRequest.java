@@ -17,6 +17,8 @@ public record UpdateAgencyDirectoryProfileRequest(
         Integer serviceRadiusMiles,
         @Size(max = 4000) String publicDescription,
         List<Qualification> qualificationsSupported,
-        Boolean directoryListed
+        Boolean directoryListed,
+        Boolean hiringOpen,
+        @Size(max = 1000) String hiringNote
 ) {
 }

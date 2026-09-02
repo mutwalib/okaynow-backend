@@ -1,5 +1,8 @@
 package com.okaynow.users.controller;
 
+import com.okaynow.hiring.dto.CaregiverAgencyInterestResponse;
+import com.okaynow.hiring.dto.ExpressInterestRequest;
+import com.okaynow.hiring.service.CaregiverAgencyInterestService;
 import com.okaynow.roster.dto.AgencyRosterEntryResponse;
 import com.okaynow.roster.service.AgencyRosterService;
 import com.okaynow.users.dto.AddCaregiverQualificationsRequest;
@@ -35,6 +38,7 @@ public class CaregiverController {
 
     private final CaregiverProfileService caregiverProfileService;
     private final AgencyRosterService agencyRosterService;
+    private final CaregiverAgencyInterestService interestService;
     private final UserService userService;
 
     @GetMapping("/me")
@@ -76,12 +80,33 @@ public class CaregiverController {
         return ResponseEntity.ok(agencyRosterService.listInvitesForCaregiver(currentUserId(authentication)));
     }
 
+    @GetMapping("/me/rosters")
+    @PreAuthorize("hasRole('CAREGIVER')")
+    public ResponseEntity<List<AgencyRosterEntryResponse>> myRosters(Authentication authentication) {
+        return ResponseEntity.ok(agencyRosterService.listMembershipsForCaregiver(currentUserId(authentication)));
+    }
+
     @PostMapping("/me/roster-invites/{id}/accept")
     @PreAuthorize("hasRole('CAREGIVER')")
     public ResponseEntity<AgencyRosterEntryResponse> acceptRosterInvite(
             Authentication authentication,
             @PathVariable UUID id) {
         return ResponseEntity.ok(agencyRosterService.acceptInvite(currentUserId(authentication), id));
+    }
+
+    @GetMapping("/me/agency-interests")
+    @PreAuthorize("hasRole('CAREGIVER')")
+    public ResponseEntity<List<CaregiverAgencyInterestResponse>> myInterests(Authentication authentication) {
+        return ResponseEntity.ok(interestService.listForCaregiver(currentUserId(authentication)));
+    }
+
+    @PostMapping("/me/agency-interests")
+    @PreAuthorize("hasRole('CAREGIVER')")
+    @ResponseStatus(HttpStatus.CREATED)
+    public CaregiverAgencyInterestResponse expressInterest(
+            Authentication authentication,
+            @Valid @RequestBody ExpressInterestRequest request) {
+        return interestService.expressInterest(currentUserId(authentication), request);
     }
 
     private UUID currentUserId(Authentication authentication) {

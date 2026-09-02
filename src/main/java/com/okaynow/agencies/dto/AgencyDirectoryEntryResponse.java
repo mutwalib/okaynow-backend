@@ -1,10 +1,8 @@
 package com.okaynow.agencies.dto;
 
 import com.okaynow.agencies.domain.SubscriptionPlan;
-import com.okaynow.agencies.domain.SubscriptionStatus;
 import com.okaynow.users.domain.Qualification;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -14,11 +12,14 @@ public record AgencyDirectoryEntryResponse(
         String displayName,
         String city,
         String state,
+        String zip,
         Double lat,
         Double lng,
         Double distanceMiles,
         SubscriptionPlan subscriptionPlan,
         List<Qualification> qualificationsSupported,
-        String publicDescriptionSnippet
+        String publicDescriptionSnippet,
+        boolean hiringOpen,
+        String hiringNote
 ) {
 }

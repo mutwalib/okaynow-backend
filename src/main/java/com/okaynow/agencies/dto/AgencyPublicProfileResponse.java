@@ -24,6 +24,8 @@ public record AgencyPublicProfileResponse(
         List<Qualification> qualificationsSupported,
         SubscriptionPlan subscriptionPlan,
         SubscriptionStatus subscriptionStatus,
-        boolean directoryListed
+        boolean directoryListed,
+        boolean hiringOpen,
+        String hiringNote
 ) {
 }

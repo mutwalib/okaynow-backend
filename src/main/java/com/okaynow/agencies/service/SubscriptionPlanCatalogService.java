@@ -1,7 +1,9 @@
 package com.okaynow.agencies.service;
 
+import com.okaynow.agencies.domain.PlanCapability;
 import com.okaynow.agencies.domain.SubscriptionPlan;
 import com.okaynow.agencies.domain.SubscriptionPlanDefinition;
+import com.okaynow.agencies.dto.PlanCapabilityResponse;
 import com.okaynow.agencies.dto.SubscriptionPlanCatalogResponse;
 import com.okaynow.agencies.dto.UpdateSubscriptionPlanCatalogRequest;
 import com.okaynow.agencies.repository.SubscriptionPlanDefinitionRepository;
@@ -26,6 +28,22 @@ public class SubscriptionPlanCatalogService {
     public SubscriptionPlanDefinition requireDefinition(SubscriptionPlan plan) {
         return repository.findById(plan)
                 .orElseThrow(() -> new ResourceNotFoundException("Plan not found"));
+    }
+
+    @Transactional(readOnly = true)
+    public List<PlanCapabilityResponse> listCapabilitiesForPlan(SubscriptionPlan plan) {
+        return PlanCapability.orderedForPlan(plan).stream()
+                .map(cap -> PlanCapabilityResponse.of(cap, plan))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PlanCapabilityResponse> listAllCapabilities() {
+        List<PlanCapabilityResponse> all = new ArrayList<>();
+        for (SubscriptionPlan plan : SubscriptionPlan.values()) {
+            all.addAll(listCapabilitiesForPlan(plan));
+        }
+        return all;
     }
 
     @Transactional(readOnly = true)
@@ -86,10 +104,9 @@ public class SubscriptionPlanCatalogService {
                     .plan(SubscriptionPlan.STARTER)
                     .displayName("Starter")
                     .tagline("Get listed and connect with homes.")
-                    .features(new ArrayList<>(List.of(
-                            "Directory listing in the home agency search",
-                            "Home connection requests and messaging",
-                            "Agency console — roster, connections, and profile")))
+                    .features(new ArrayList<>(PlanCapability.labelsFromCapabilities(
+                            PlanCapability.recommendedFor(SubscriptionPlan.STARTER),
+                            SubscriptionPlan.STARTER)))
                     .monthlyPriceCents(29_900)
                     .sortOrder(0)
                     .enabled(true)
@@ -98,12 +115,9 @@ public class SubscriptionPlanCatalogService {
                     .plan(SubscriptionPlan.PROFESSIONAL)
                     .displayName("Professional")
                     .tagline("Run scheduling, roster, and payroll export.")
-                    .features(new ArrayList<>(List.of(
-                            "Everything in Starter",
-                            "Full shift scheduling and assignments",
-                            "Caregiver roster and shift inbox",
-                            "Rate cards (pay and bill rates)",
-                            "EVV-backed hours export (CSV for payroll)")))
+                    .features(new ArrayList<>(PlanCapability.labelsFromCapabilities(
+                            PlanCapability.recommendedFor(SubscriptionPlan.PROFESSIONAL),
+                            SubscriptionPlan.PROFESSIONAL)))
                     .monthlyPriceCents(79_900)
                     .sortOrder(1)
                     .enabled(true)
@@ -112,11 +126,9 @@ public class SubscriptionPlanCatalogService {
                     .plan(SubscriptionPlan.FEATURED)
                     .displayName("Featured")
                     .tagline("Stand out in the home directory.")
-                    .features(new ArrayList<>(List.of(
-                            "Everything in Professional",
-                            "Featured placement in the home directory",
-                            "Priority ranking in location search",
-                            "Verified badge on your public profile")))
+                    .features(new ArrayList<>(PlanCapability.labelsFromCapabilities(
+                            PlanCapability.recommendedFor(SubscriptionPlan.FEATURED),
+                            SubscriptionPlan.FEATURED)))
                     .monthlyPriceCents(99_900)
                     .sortOrder(2)
                     .enabled(true)

@@ -1,6 +1,7 @@
 package com.okaynow.agencies.controller;
 
 import com.okaynow.agencies.domain.SubscriptionPlan;
+import com.okaynow.agencies.dto.PlanCapabilityResponse;
 import com.okaynow.agencies.dto.SubscriptionPlanCatalogResponse;
 import com.okaynow.agencies.dto.UpdateSubscriptionPlanCatalogRequest;
 import com.okaynow.agencies.service.SubscriptionPlanCatalogService;
@@ -24,6 +25,17 @@ import java.util.List;
 public class SuperAdminSubscriptionPlanController {
 
     private final SubscriptionPlanCatalogService catalogService;
+
+    @GetMapping("/capabilities")
+    public ResponseEntity<List<PlanCapabilityResponse>> listCapabilities() {
+        return ResponseEntity.ok(catalogService.listAllCapabilities());
+    }
+
+    @GetMapping("/{plan}/capabilities")
+    public ResponseEntity<List<PlanCapabilityResponse>> listCapabilitiesForPlan(
+            @PathVariable SubscriptionPlan plan) {
+        return ResponseEntity.ok(catalogService.listCapabilitiesForPlan(plan));
+    }
 
     @GetMapping
     public ResponseEntity<List<SubscriptionPlanCatalogResponse>> list() {

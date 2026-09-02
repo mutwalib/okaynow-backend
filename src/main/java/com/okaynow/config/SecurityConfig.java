@@ -40,6 +40,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/legal/current", "/api/legal/current/**").permitAll()
                         .requestMatchers("/api/service-region").permitAll()
                         .requestMatchers("/api/agencies/directory").permitAll()
+                        .requestMatchers("/api/agencies/subscription-plans").permitAll()
                         .requestMatchers("/api/agencies/*/public-profile").permitAll()
                         .requestMatchers("/api/webhooks/stripe").permitAll()
                         .requestMatchers("/uploads/**").permitAll()

@@ -35,6 +35,7 @@ public class StripeBillingService {
     private final AgencyAccessService agencyAccessService;
     private final StripeConnectService stripeConnectService;
     private final InvoicePaymentService invoicePaymentService;
+    private final SubscriptionPlanCatalogService subscriptionPlanCatalogService;
 
     public boolean isConfigured() {
         return stripeProperties.isConfigured();
@@ -51,19 +52,16 @@ public class StripeBillingService {
                     "Stripe billing is not configured. Contact platform support to activate your subscription.");
         }
         Stripe.apiKey = stripeProperties.getSecretKey();
-        String priceId = priceIdForPlan(plan);
-        if (priceId == null || priceId.isBlank()) {
-            throw new BadRequestException("Billing is not configured for plan " + plan);
+        var planDefinition = subscriptionPlanCatalogService.requireDefinition(plan);
+        if (!planDefinition.isEnabled()) {
+            throw new BadRequestException("That plan is not available");
         }
         try {
             SessionCreateParams.Builder params = SessionCreateParams.builder()
                     .setMode(SessionCreateParams.Mode.SUBSCRIPTION)
                     .setSuccessUrl(stripeProperties.getSuccessUrl())
                     .setCancelUrl(stripeProperties.getCancelUrl())
-                    .addLineItem(SessionCreateParams.LineItem.builder()
-                            .setPrice(priceId)
-                            .setQuantity(1L)
-                            .build())
+                    .addLineItem(buildLineItem(plan, planDefinition))
                     .putMetadata("agencyId", agency.getId().toString())
                     .putMetadata("plan", plan.name());
             if (agency.getStripeCustomerId() != null) {
@@ -139,6 +137,38 @@ public class StripeBillingService {
             agencyRepository.save(agency);
             log.info("Activated subscription for agency {}", agencyId);
         });
+    }
+
+    private SessionCreateParams.LineItem buildLineItem(
+            SubscriptionPlan plan, com.okaynow.agencies.domain.SubscriptionPlanDefinition definition) {
+        int cents = definition.getMonthlyPriceCents();
+        if (cents >= 50) {
+            return SessionCreateParams.LineItem.builder()
+                    .setQuantity(1L)
+                    .setPriceData(SessionCreateParams.LineItem.PriceData.builder()
+                            .setCurrency("usd")
+                            .setUnitAmount((long) cents)
+                            .setRecurring(SessionCreateParams.LineItem.PriceData.Recurring.builder()
+                                    .setInterval(
+                                            SessionCreateParams.LineItem.PriceData.Recurring.Interval.MONTH)
+                                    .build())
+                            .setProductData(SessionCreateParams.LineItem.PriceData.ProductData.builder()
+                                    .setName("OkayNow " + definition.getDisplayName())
+                                    .putMetadata("plan", plan.name())
+                                    .build())
+                            .build())
+                    .build();
+        }
+        String priceId = priceIdForPlan(plan);
+        if (priceId == null || priceId.isBlank()) {
+            throw new BadRequestException(
+                    "Set a monthly price for " + plan + " in the platform Plans console, "
+                            + "or configure Stripe price IDs in the environment.");
+        }
+        return SessionCreateParams.LineItem.builder()
+                .setPrice(priceId)
+                .setQuantity(1L)
+                .build();
     }
 
     private String priceIdForPlan(SubscriptionPlan plan) {

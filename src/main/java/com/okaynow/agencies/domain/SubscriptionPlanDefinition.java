@@ -48,9 +48,10 @@ public class SubscriptionPlanDefinition {
     @Builder.Default
     private List<String> features = new ArrayList<>();
 
-    /** Optional display label, e.g. "$299/mo" — billing still uses Stripe price IDs. */
-    @Column(length = 32)
-    private String priceLabel;
+    /** Monthly subscription amount in USD cents (e.g. 29900 = $299/mo). Used for Stripe Checkout. */
+    @Column(nullable = false)
+    @Builder.Default
+    private int monthlyPriceCents = 0;
 
     @Column(nullable = false)
     @Builder.Default

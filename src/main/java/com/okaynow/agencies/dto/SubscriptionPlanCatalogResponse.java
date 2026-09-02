@@ -9,7 +9,8 @@ public record SubscriptionPlanCatalogResponse(
         String displayName,
         String tagline,
         List<String> features,
-        String priceLabel,
+        int monthlyPriceCents,
+        String priceDisplay,
         int sortOrder,
         boolean enabled
 ) {

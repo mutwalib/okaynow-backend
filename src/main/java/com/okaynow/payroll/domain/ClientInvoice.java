@@ -52,6 +52,10 @@ public class ClientInvoice {
     @Column(name = "invoice_number", nullable = false, length = 32)
     private String invoiceNumber;
 
+    /** Owning agency tenant (null for legacy platform-only invoices). */
+    @Column(name = "agency_id")
+    private UUID agencyId;
+
     /** Family client bill-to (null when invoicing a facility). */
     @Column(name = "client_profile_id")
     private UUID clientProfileId;
@@ -85,6 +89,14 @@ public class ClientInvoice {
     private Instant paidAt;
 
     private Instant voidedAt;
+
+    /** Stripe Checkout Session id for Connect payment collection. */
+    @Column(length = 128)
+    private String stripeCheckoutSessionId;
+
+    /** Stripe PaymentIntent id after successful Connect checkout. */
+    @Column(length = 128)
+    private String stripePaymentIntentId;
 
     @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("shiftDate ASC")

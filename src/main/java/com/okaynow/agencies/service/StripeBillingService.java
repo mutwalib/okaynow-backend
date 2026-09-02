@@ -8,6 +8,7 @@ import com.okaynow.agencies.dto.CheckoutSessionResponse;
 import com.okaynow.agencies.repository.AgencyRepository;
 import com.okaynow.agencies.support.AgencyAccessService;
 import com.okaynow.common.exception.BadRequestException;
+import com.okaynow.payroll.service.InvoicePaymentService;
 import com.stripe.Stripe;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.model.Account;
@@ -33,6 +34,7 @@ public class StripeBillingService {
     private final AgencyRepository agencyRepository;
     private final AgencyAccessService agencyAccessService;
     private final StripeConnectService stripeConnectService;
+    private final InvoicePaymentService invoicePaymentService;
 
     public boolean isConfigured() {
         return stripeProperties.isConfigured();
@@ -95,7 +97,12 @@ public class StripeBillingService {
                     .getObject()
                     .orElse(null);
             if (session != null) {
-                applyCheckoutCompleted(session);
+                Map<String, String> metadata = session.getMetadata();
+                if (metadata != null && "HOME_INVOICE".equals(metadata.get("purpose"))) {
+                    invoicePaymentService.applyCheckoutCompleted(session);
+                } else {
+                    applySubscriptionCheckoutCompleted(session);
+                }
             }
         } else if ("account.updated".equals(event.getType())) {
             Account account = (Account) event.getDataObjectDeserializer()
@@ -110,9 +117,13 @@ public class StripeBillingService {
         }
     }
 
-    private void applyCheckoutCompleted(Session session) {
+    private void applySubscriptionCheckoutCompleted(Session session) {
         Map<String, String> metadata = session.getMetadata();
         if (metadata == null || !metadata.containsKey("agencyId")) {
+            return;
+        }
+        // Home invoice checkouts also carry agencyId — ignore those here.
+        if ("HOME_INVOICE".equals(metadata.get("purpose"))) {
             return;
         }
         UUID agencyId = UUID.fromString(metadata.get("agencyId"));

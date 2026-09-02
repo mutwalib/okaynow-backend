@@ -16,9 +16,11 @@ import com.okaynow.agencies.support.AgencyAccessService;
 import com.okaynow.booking.dto.ShiftClaimResponse;
 import com.okaynow.connections.dto.HomeAgencyConnectionResponse;
 import com.okaynow.connections.service.HomeAgencyConnectionService;
+import com.okaynow.payroll.dto.ClientInvoiceResponse;
 import com.okaynow.payroll.dto.AgencySettingsResponse;
 import com.okaynow.payroll.dto.UpdateAgencySettingsRequest;
 import com.okaynow.payroll.service.AgencySettingsService;
+import com.okaynow.payroll.service.InvoiceService;
 import com.okaynow.roster.dto.AgencyRosterEntryResponse;
 import com.okaynow.roster.dto.InviteRosterCaregiverRequest;
 import com.okaynow.roster.service.AgencyRosterService;
@@ -64,6 +66,7 @@ public class AgencyTenantController {
     private final AgencySettingsService agencySettingsService;
     private final AgencyAccessService agencyAccessService;
     private final AgencyHoursExportService agencyHoursExportService;
+    private final InvoiceService invoiceService;
     private final AgencyRosterService agencyRosterService;
     private final ShiftRequestService shiftRequestService;
     private final AgencyShiftService agencyShiftService;
@@ -147,6 +150,22 @@ public class AgencyTenantController {
                         "attachment; filename=\"agency-hours-" + from + "-to-" + to + ".csv\"")
                 .contentType(new MediaType("text", "csv"))
                 .body(csv);
+    }
+
+    @GetMapping("/invoices")
+    public ResponseEntity<List<ClientInvoiceResponse>> invoices(Authentication authentication) {
+        UUID agencyId = agencyAccessService.requireAgencyForUser(currentUserId(authentication)).getId();
+        return ResponseEntity.ok(invoiceService.listForAgency(agencyId));
+    }
+
+    @PostMapping("/invoices/{invoiceId}/send")
+    public ResponseEntity<ClientInvoiceResponse> sendInvoice(
+            Authentication authentication,
+            @PathVariable UUID invoiceId) {
+        UUID userId = currentUserId(authentication);
+        UUID agencyId = agencyAccessService.requireWritableAgencyId(userId);
+        return ResponseEntity.ok(invoiceService.sendForAgency(
+                agencyId, invoiceId, userService.getByEmail(authentication.getName())));
     }
 
     @GetMapping("/roster")

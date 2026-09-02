@@ -1,5 +1,6 @@
 package com.okaynow.payroll.service;
 
+import com.okaynow.agencies.repository.AgencyRepository;
 import com.okaynow.audit.domain.AuditAction;
 import com.okaynow.audit.service.AuditLogService;
 import com.okaynow.common.dto.PagedResponse;
@@ -68,6 +69,7 @@ public class InvoiceService {
     private final UserRepository userRepository;
     private final SettlementService settlementService;
     private final AgencySettingsService agencySettingsService;
+    private final AgencyRepository agencyRepository;
     private final AuditLogService auditLogService;
     private final NotificationService notificationService;
 
@@ -252,8 +254,10 @@ public class InvoiceService {
         }
 
         UUID billToId = hasClient ? client.getId() : facility.getId();
+        UUID agencyId = resolveAgencyId(settlements);
         ClientInvoice invoice = ClientInvoice.builder()
                 .invoiceNumber(nextInvoiceNumber())
+                .agencyId(agencyId)
                 .clientProfileId(hasClient ? client.getId() : null)
                 .facilityProfileId(hasFacility ? facility.getId() : null)
                 .status(InvoiceStatus.DRAFT)
@@ -326,8 +330,10 @@ public class InvoiceService {
                 .build();
 
         LocalDate issued = LocalDate.now();
+        UUID agencyId = shiftRepository.findById(shiftId).map(Shift::getAgencyId).orElse(null);
         ClientInvoice invoice = ClientInvoice.builder()
                 .invoiceNumber(nextInvoiceNumber())
+                .agencyId(agencyId)
                 .clientProfileId(client.getId())
                 .status(InvoiceStatus.DRAFT)
                 .issuedDate(issued)
@@ -480,11 +486,11 @@ public class InvoiceService {
                 notifyUser,
                 NotificationType.INVOICE_SENT,
                 "Invoice " + invoice.getInvoiceNumber(),
-                "OkayNow is requesting payment of $"
+                "Your agency is requesting payment of $"
                         + invoice.getTotalAmount()
                         + " by "
                         + invoice.getDueDate()
-                        + ".",
+                        + ". Pay online from Billing when available.",
                 payload);
 
         auditLogService.record(actor, AuditAction.INVOICE_SENT, "INVOICE",
@@ -530,6 +536,42 @@ public class InvoiceService {
                 "number=%s settlements=%s".formatted(
                         invoice.getInvoiceNumber(), settlementIds.size()));
         return toResponse(findWithLines(invoiceId));
+    }
+
+    /**
+     * Marks a SENT invoice paid after Stripe Connect Checkout completes.
+     */
+    @Transactional
+    public ClientInvoiceResponse markPaidFromStripe(
+            UUID invoiceId, String checkoutSessionId, String paymentIntentId) {
+        ClientInvoice invoice = findWithLines(invoiceId);
+        if (checkoutSessionId != null && !checkoutSessionId.isBlank()) {
+            invoice.setStripeCheckoutSessionId(checkoutSessionId);
+        }
+        if (paymentIntentId != null && !paymentIntentId.isBlank()) {
+            invoice.setStripePaymentIntentId(paymentIntentId);
+        }
+        invoiceRepository.save(invoice);
+        return markPaid(invoiceId, systemActor());
+    }
+
+    @Transactional(readOnly = true)
+    public List<ClientInvoiceResponse> listForAgency(UUID agencyId) {
+        return invoiceRepository.findByAgencyIdOrderByIssuedDateDescCreatedAtDesc(
+                        agencyId, Pageable.unpaged())
+                .getContent()
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional
+    public ClientInvoiceResponse sendForAgency(UUID agencyId, UUID invoiceId, User actor) {
+        ClientInvoice invoice = findWithLines(invoiceId);
+        if (invoice.getAgencyId() == null || !invoice.getAgencyId().equals(agencyId)) {
+            throw new ResourceNotFoundException("Invoice not found");
+        }
+        return send(invoiceId, actor);
     }
 
     @Transactional
@@ -840,6 +882,7 @@ public class InvoiceService {
         return new ClientInvoiceResponse(
                 invoice.getId(),
                 invoice.getInvoiceNumber(),
+                invoice.getAgencyId(),
                 invoice.getClientProfileId(),
                 client != null ? client.getFirstName() : null,
                 client != null ? client.getLastName() : null,
@@ -854,7 +897,42 @@ public class InvoiceService {
                 invoice.getPaidAt(),
                 invoice.getVoidedAt(),
                 invoice.getCreatedAt(),
+                isPayableOnline(invoice),
                 lines);
+    }
+
+    private boolean isPayableOnline(ClientInvoice invoice) {
+        if (invoice.getStatus() != InvoiceStatus.SENT || invoice.getAgencyId() == null) {
+            return false;
+        }
+        if (invoice.getTotalAmount() == null
+                || invoice.getTotalAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            return false;
+        }
+        return agencyRepository.findById(invoice.getAgencyId())
+                .map(a -> a.getStripeConnectAccountId() != null
+                        && !a.getStripeConnectAccountId().isBlank()
+                        && a.isStripeConnectChargesEnabled())
+                .orElse(false);
+    }
+
+    private UUID resolveAgencyId(List<ShiftSettlement> settlements) {
+        UUID agencyId = null;
+        for (ShiftSettlement settlement : settlements) {
+            UUID shiftAgencyId = shiftRepository.findById(settlement.getShiftId())
+                    .map(Shift::getAgencyId)
+                    .orElse(null);
+            if (shiftAgencyId == null) {
+                continue;
+            }
+            if (agencyId == null) {
+                agencyId = shiftAgencyId;
+            } else if (!agencyId.equals(shiftAgencyId)) {
+                throw new BadRequestException(
+                        "All settlements on an invoice must belong to the same agency");
+            }
+        }
+        return agencyId;
     }
 
     private static String blankToNull(String value) {

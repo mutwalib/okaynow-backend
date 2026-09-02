@@ -27,6 +27,9 @@ public interface ClientInvoiceRepository extends JpaRepository<ClientInvoice, UU
             UUID facilityProfileId, InvoiceStatus status, Pageable pageable);
 
     @EntityGraph(attributePaths = {"lines"})
+    Page<ClientInvoice> findByAgencyIdOrderByIssuedDateDescCreatedAtDesc(UUID agencyId, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"lines"})
     Page<ClientInvoice> findAllByOrderByIssuedDateDescCreatedAtDesc(Pageable pageable);
 
     @EntityGraph(attributePaths = {"lines"})

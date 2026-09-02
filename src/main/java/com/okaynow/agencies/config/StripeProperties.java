@@ -20,6 +20,8 @@ public class StripeProperties {
     private String priceFeatured = "";
     private String connectReturnUrl = "http://localhost:3000/agency/billing?connect=return";
     private String connectRefreshUrl = "http://localhost:3000/agency/billing?connect=refresh";
+    private String invoiceSuccessUrl = "http://localhost:3000/client/billing?paid=success";
+    private String invoiceCancelUrl = "http://localhost:3000/client/billing?paid=cancel";
 
     public boolean isConfigured() {
         return secretKey != null && !secretKey.isBlank();

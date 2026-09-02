@@ -2,6 +2,7 @@ package com.okaynow.payroll.controller;
 
 import com.okaynow.common.dto.PagedResponse;
 import com.okaynow.payroll.dto.ClientInvoiceResponse;
+import com.okaynow.payroll.service.InvoicePaymentService;
 import com.okaynow.payroll.service.InvoiceService;
 import com.okaynow.users.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -25,6 +27,7 @@ import java.util.UUID;
 public class ClientInvoiceController {
 
     private final InvoiceService invoiceService;
+    private final InvoicePaymentService invoicePaymentService;
     private final UserService userService;
 
     @GetMapping
@@ -40,6 +43,13 @@ public class ClientInvoiceController {
     public ResponseEntity<ClientInvoiceResponse> getMine(
             @PathVariable UUID id, Authentication authentication) {
         return ResponseEntity.ok(invoiceService.getForClientUser(
+                id, userService.getByEmail(authentication.getName())));
+    }
+
+    @PostMapping("/{id}/checkout")
+    public ResponseEntity<com.okaynow.agencies.dto.CheckoutSessionResponse> checkout(
+            @PathVariable UUID id, Authentication authentication) {
+        return ResponseEntity.ok(invoicePaymentService.createCheckoutForClient(
                 id, userService.getByEmail(authentication.getName())));
     }
 

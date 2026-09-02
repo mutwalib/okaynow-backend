@@ -11,6 +11,7 @@ import java.util.UUID;
 public record ClientInvoiceResponse(
         UUID id,
         String invoiceNumber,
+        UUID agencyId,
         UUID clientProfileId,
         String clientFirstName,
         String clientLastName,
@@ -25,6 +26,7 @@ public record ClientInvoiceResponse(
         Instant paidAt,
         Instant voidedAt,
         Instant createdAt,
+        boolean payableOnline,
         List<ClientInvoiceLineResponse> lines
 ) {
 }

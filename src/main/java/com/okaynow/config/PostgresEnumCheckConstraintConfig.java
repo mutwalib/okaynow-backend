@@ -30,6 +30,8 @@ public class PostgresEnumCheckConstraintConfig implements ApplicationRunner {
         sync("audit_logs", "action", "audit_logs_action_check", AuditAction.class);
         sync("users", "status", "users_status_check",
                 com.okaynow.users.domain.UserStatus.class);
+        sync("users", "role", "users_role_check",
+                com.okaynow.users.domain.Role.class);
         sync("shifts", "status", "shifts_status_check", ShiftStatus.class);
         sync("shifts", "schedule_type", "shifts_schedule_type_check", ShiftScheduleType.class);
         sync("visits", "method", "visits_method_check", ClockMethod.class);
@@ -51,6 +53,14 @@ public class PostgresEnumCheckConstraintConfig implements ApplicationRunner {
         sync("shift_settlements", "caregiver_payment_status",
                 "shift_settlements_caregiver_payment_status_check",
                 com.okaynow.payroll.domain.PaymentStatus.class);
+        // Element-collection + shift requiredQualification: MAP/OTHER were added after
+        // the original CHECK constraint and ddl-auto does not widen it.
+        sync("caregiver_qualifications", "qualification",
+                "caregiver_qualifications_qualification_check",
+                com.okaynow.users.domain.Qualification.class);
+        sync("shifts", "required_qualification",
+                "shifts_required_qualification_check",
+                com.okaynow.users.domain.Qualification.class);
     }
 
     private void sync(String table, String column, String constraint, Class<? extends Enum<?>> enumType) {

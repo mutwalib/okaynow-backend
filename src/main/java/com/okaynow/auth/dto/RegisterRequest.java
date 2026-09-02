@@ -19,6 +19,8 @@ public record RegisterRequest(
         MedicaidEligibility medicaidEligible,
         CareRecipientRelationship relationshipToCareRecipient,
         String facilityName,
+        /** Required when role is AGENCY_ADMIN. */
+        String agencyName,
         String addressLine,
         String city,
         @Size(max = 2) String state,

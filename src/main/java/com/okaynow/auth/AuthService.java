@@ -1,5 +1,6 @@
 package com.okaynow.auth;
 
+import com.okaynow.agencies.service.AgencyService;
 import com.okaynow.auth.domain.AuthChallengePurpose;
 import com.okaynow.auth.dto.AuthResponse;
 import com.okaynow.auth.dto.ChangePasswordRequest;
@@ -55,6 +56,7 @@ public class AuthService {
     private final LegalDocumentService legalDocumentService;
     private final AuthChallengeService challengeService;
     private final OnboardingService onboardingService;
+    private final AgencyService agencyService;
 
     @Transactional
     public RegisterResult register(RegisterRequest request) {
@@ -141,6 +143,25 @@ public class AuthService {
                     .state(region.state())
                     .zip(region.zip())
                     .build());
+        } else if (request.role() == Role.AGENCY_ADMIN) {
+            String agencyName = request.agencyName() != null && !request.agencyName().isBlank()
+                    ? request.agencyName()
+                    : request.facilityName();
+            if (isBlank(agencyName)
+                    || isBlank(request.addressLine())
+                    || isBlank(request.city())
+                    || isBlank(request.zip())) {
+                throw new BadRequestException(
+                        "Agency name and full business address are required for agency registration");
+            }
+            var region = serviceRegionService.validate(request.state(), request.zip());
+            agencyService.createForRegistration(
+                    user,
+                    agencyName.trim(),
+                    request.addressLine().trim(),
+                    request.city().trim(),
+                    region.state(),
+                    region.zip());
         }
 
         challengeService.issue(user, AuthChallengePurpose.SIGNUP_VERIFY);

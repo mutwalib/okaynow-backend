@@ -38,6 +38,7 @@ import com.okaynow.users.domain.ClientProfile;
 import com.okaynow.users.domain.FacilityProfile;
 import com.okaynow.users.domain.Role;
 import com.okaynow.users.domain.User;
+import com.okaynow.users.domain.UserStatus;
 import com.okaynow.users.repository.CaregiverProfileRepository;
 import com.okaynow.users.repository.ClientProfileRepository;
 import com.okaynow.users.repository.FacilityProfileRepository;
@@ -94,6 +95,7 @@ public class BookingService {
     @Transactional
     public ShiftClaimResponse claim(UUID shiftId, String caregiverEmail) {
         CaregiverProfile caregiver = lockCaregiverByEmail(caregiverEmail);
+        assertActiveForNewMarketplaceClaim(caregiver);
         Shift shift = lockShift(shiftId);
 
         if (shift.getStatus() != ShiftStatus.OPEN) {
@@ -1375,6 +1377,19 @@ public class BookingService {
         User user = userService.getByEmail(email);
         return caregiverProfileRepository.findByUserIdForUpdate(user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Caregiver profile not found"));
+    }
+
+    /**
+     * New open-board claims require an ACTIVE account. Pending-review caregivers may still
+     * fulfill existing claims (clock, release, accept/decline invites) via the access filter.
+     */
+    private static void assertActiveForNewMarketplaceClaim(CaregiverProfile caregiver) {
+        User user = caregiver.getUser();
+        if (user == null || user.getStatus() != UserStatus.ACTIVE) {
+            throw new BadRequestException(
+                    "Your account is pending agency review. You can manage upcoming shifts you already have, "
+                            + "but cannot claim new open shifts until approved.");
+        }
     }
 
     private Shift lockShift(UUID shiftId) {

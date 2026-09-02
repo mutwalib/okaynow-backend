@@ -10,6 +10,7 @@ import com.okaynow.agencies.support.AgencyAccessService;
 import com.okaynow.common.exception.BadRequestException;
 import com.stripe.Stripe;
 import com.stripe.exception.SignatureVerificationException;
+import com.stripe.model.Account;
 import com.stripe.model.Event;
 import com.stripe.model.checkout.Session;
 import com.stripe.net.Webhook;
@@ -31,6 +32,7 @@ public class StripeBillingService {
     private final StripeProperties stripeProperties;
     private final AgencyRepository agencyRepository;
     private final AgencyAccessService agencyAccessService;
+    private final StripeConnectService stripeConnectService;
 
     public boolean isConfigured() {
         return stripeProperties.isConfigured();
@@ -94,6 +96,13 @@ public class StripeBillingService {
                     .orElse(null);
             if (session != null) {
                 applyCheckoutCompleted(session);
+            }
+        } else if ("account.updated".equals(event.getType())) {
+            Account account = (Account) event.getDataObjectDeserializer()
+                    .getObject()
+                    .orElse(null);
+            if (account != null) {
+                stripeConnectService.applyAccountUpdated(account);
             }
         } else if ("customer.subscription.updated".equals(event.getType())
                 || "customer.subscription.deleted".equals(event.getType())) {

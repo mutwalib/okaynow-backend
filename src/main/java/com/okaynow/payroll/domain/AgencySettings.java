@@ -15,10 +15,14 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.DayOfWeek;
+import java.util.UUID;
 
 /**
- * Singleton agency economics: take % of client bill rate, and pay-period boundaries.
+ * Agency economics: take % of client bill rate, and pay-period boundaries.
  * Clients enter caregiver pay; bill = pay / (1 - take%). Example: pay $22, take 35% → bill ≈ $33.85.
+ *
+ * <p>Legacy installs use {@link #SINGLETON_ID} with {@code agencyId == null} (platform default).
+ * Multi-tenant agencies each have a row keyed by {@link #agencyId}.
  */
 @Entity
 @Table(name = "agency_settings")
@@ -33,6 +37,13 @@ public class AgencySettings {
 
     @Id
     private Long id;
+
+    /**
+     * Owning tenant. Null means the legacy platform-wide singleton used by pre-tenant
+     * marketplace flows and admin rate overrides.
+     */
+    @Column(unique = true)
+    private UUID agencyId;
 
     /** Percent of client bill rate retained by the agency (0–99.99). */
     @Column(nullable = false, precision = 6, scale = 2)

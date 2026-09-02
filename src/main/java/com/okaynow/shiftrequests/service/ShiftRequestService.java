@@ -161,7 +161,7 @@ public class ShiftRequestService {
             throw new BadRequestException("This care need is no longer open");
         }
 
-        AgencySettings settings = agencySettingsService.getOrCreate();
+        AgencySettings settings = agencySettingsService.getOrCreateForAgency(agency.getId());
         var payRate = settings.getDefaultPayRate();
         var billRate = settings.billRateFromPayRate(payRate);
 

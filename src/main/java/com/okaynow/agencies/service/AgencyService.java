@@ -192,6 +192,9 @@ public class AgencyService {
                 agency.getSubscriptionPeriodEnd(),
                 agency.isDirectoryListed(),
                 stripeBillingService.isConfigured(),
+                agency.getStripeConnectAccountId() != null
+                        && agency.isStripeConnectChargesEnabled()
+                        && agency.isStripeConnectPayoutsEnabled(),
                 agency.subscriptionAllowsWrites());
     }
 

@@ -10,6 +10,7 @@ import com.okaynow.users.domain.User;
 import com.okaynow.users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
@@ -20,13 +21,23 @@ public class AgencyAccessService {
     private final AgencyStaffRepository agencyStaffRepository;
     private final UserRepository userRepository;
 
+    @Transactional(readOnly = true)
     public AgencyStaff requireStaffForUser(UUID userId) {
-        return agencyStaffRepository.findFirstByUserId(userId)
+        return agencyStaffRepository.findFirstByUserIdWithAgency(userId)
+                .or(() -> agencyStaffRepository.findFirstByUserId(userId))
                 .orElseThrow(() -> new ForbiddenException("No agency tenant is linked to this account"));
     }
 
+    @Transactional(readOnly = true)
     public Agency requireAgencyForUser(UUID userId) {
         return requireStaffForUser(userId).getAgency();
+    }
+
+    @Transactional(readOnly = true)
+    public UUID requireWritableAgencyId(UUID userId) {
+        Agency agency = requireAgencyForUser(userId);
+        assertAgencyAllowsWrites(agency);
+        return agency.getId();
     }
 
     public void assertAgencyAllowsWrites(Agency agency) {

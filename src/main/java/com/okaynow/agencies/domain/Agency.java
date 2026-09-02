@@ -97,6 +97,19 @@ public class Agency {
 
     private Instant subscriptionPeriodEnd;
 
+    /** Stripe Connect Express account id (acct_...) for collecting home invoices. */
+    private String stripeConnectAccountId;
+
+    /** Cached from Stripe account.updated — charges_enabled. */
+    @Column(nullable = false, columnDefinition = "boolean not null default false")
+    @Builder.Default
+    private boolean stripeConnectChargesEnabled = false;
+
+    /** Cached from Stripe account.updated — payouts_enabled. */
+    @Column(nullable = false, columnDefinition = "boolean not null default false")
+    @Builder.Default
+    private boolean stripeConnectPayoutsEnabled = false;
+
     /** When true and subscription is active, agency appears in the public directory. */
     @Column(nullable = false, columnDefinition = "boolean not null default false")
     @Builder.Default

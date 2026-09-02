@@ -18,6 +18,8 @@ public class StripeProperties {
     private String priceStarter = "";
     private String priceProfessional = "";
     private String priceFeatured = "";
+    private String connectReturnUrl = "http://localhost:3000/agency/billing?connect=return";
+    private String connectRefreshUrl = "http://localhost:3000/agency/billing?connect=refresh";
 
     public boolean isConfigured() {
         return secretKey != null && !secretKey.isBlank();

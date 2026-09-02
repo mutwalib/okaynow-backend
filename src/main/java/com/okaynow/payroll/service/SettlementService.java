@@ -199,7 +199,7 @@ public class SettlementService {
     }
 
     private ShiftSettlement buildAndSave(Shift shift, ShiftClaim claim) {
-        AgencySettings settings = agencySettingsService.getOrCreate();
+        AgencySettings settings = agencySettingsService.getOrCreateForAgency(shift.getAgencyId());
         var period = PayPeriodCalculator.forDate(shift.getDate(), settings);
 
         int minutes = shift.getDurationMinutes();

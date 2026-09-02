@@ -29,6 +29,7 @@ public record AgencyMeResponse(
         Instant subscriptionPeriodEnd,
         boolean directoryListed,
         boolean stripeConfigured,
+        boolean stripeConnectReady,
         boolean subscriptionAllowsWrites
 ) {
 }

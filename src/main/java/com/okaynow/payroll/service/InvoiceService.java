@@ -23,6 +23,8 @@ import com.okaynow.payroll.repository.ClientInvoiceRepository;
 import com.okaynow.payroll.repository.ShiftSettlementRepository;
 import com.okaynow.reports.dto.GeneratedReport;
 import com.okaynow.reports.support.ReportWriters;
+import com.okaynow.shifts.domain.Shift;
+import com.okaynow.shifts.repository.ShiftRepository;
 import com.okaynow.users.domain.ClientProfile;
 import com.okaynow.users.domain.FacilityProfile;
 import com.okaynow.users.domain.Role;
@@ -60,6 +62,7 @@ public class InvoiceService {
     private final ClientInvoiceRepository invoiceRepository;
     private final ClientInvoiceLineRepository invoiceLineRepository;
     private final ShiftSettlementRepository settlementRepository;
+    private final ShiftRepository shiftRepository;
     private final ClientProfileRepository clientProfileRepository;
     private final FacilityProfileRepository facilityProfileRepository;
     private final UserRepository userRepository;
@@ -118,7 +121,9 @@ public class InvoiceService {
      */
     @Transactional
     public ClientInvoiceResponse autoInvoiceForCompletedShift(UUID shiftId) {
-        AgencySettings settings = agencySettingsService.getOrCreate();
+        Shift shift = shiftRepository.findById(shiftId).orElse(null);
+        AgencySettings settings = agencySettingsService.getOrCreateForAgency(
+                shift != null ? shift.getAgencyId() : null);
         if (!settings.isAutoInvoiceOnComplete()) {
             return null;
         }

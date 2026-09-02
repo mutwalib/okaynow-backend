@@ -13,6 +13,8 @@ public interface AgencyRepository extends JpaRepository<Agency, UUID> {
 
     Optional<Agency> findBySlug(String slug);
 
+    Optional<Agency> findByStripeConnectAccountId(String stripeConnectAccountId);
+
     boolean existsBySlug(String slug);
 
     @Query("""

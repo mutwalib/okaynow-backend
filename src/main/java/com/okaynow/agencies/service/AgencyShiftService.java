@@ -40,7 +40,7 @@ public class AgencyShiftService {
     @Transactional(readOnly = true)
     public List<ShiftResponse> listForAgency(UUID agencyUserId) {
         UUID agencyId = agencyAccessService.requireAgencyForUser(agencyUserId).getId();
-        return shiftRepository.findByAgencyIdOrderByDateDescStartTimeDesc(agencyId).stream()
+        return shiftRepository.findOpenOrAssignedByAgencyId(agencyId).stream()
                 .map(shiftMapper::toResponse)
                 .map(r -> ShiftResponses.forViewer(r, Role.AGENCY_ADMIN))
                 .toList();

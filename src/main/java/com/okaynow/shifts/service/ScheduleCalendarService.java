@@ -192,12 +192,16 @@ public class ScheduleCalendarService {
             LocalDate from,
             LocalDate to,
             UUID clientProfileId,
+            UUID facilityProfileId,
             User actor) {
         if (from == null || to == null) {
             throw new BadRequestException("from and to dates are required");
         }
-        if (clientProfileId == null) {
-            throw new BadRequestException("clientProfileId is required");
+        if (clientProfileId == null && facilityProfileId == null) {
+            throw new BadRequestException("clientProfileId or facilityProfileId is required");
+        }
+        if (clientProfileId != null && facilityProfileId != null) {
+            throw new BadRequestException("Provide only one of clientProfileId or facilityProfileId");
         }
         if (to.isBefore(from)) {
             throw new BadRequestException("to must be on or after from");
@@ -211,7 +215,13 @@ public class ScheduleCalendarService {
         }
 
         Agency agency = agencyAccessService.requireAgencyForUser(actor.getId());
-        homeAgencyConnectionService.assertActiveConnectionForClientProfile(agency.getId(), clientProfileId);
+        if (clientProfileId != null) {
+            homeAgencyConnectionService.assertActiveConnectionForClientProfile(
+                    agency.getId(), clientProfileId);
+        } else {
+            homeAgencyConnectionService.assertActiveConnectionForFacilityProfile(
+                    agency.getId(), facilityProfileId);
+        }
 
         Set<UUID> agencyCaregiverIds = agencyCaregiverRepository
                 .findByAgencyIdOrderByInvitedAtDesc(agency.getId())
@@ -220,10 +230,10 @@ public class ScheduleCalendarService {
                 .map(entry -> entry.getCaregiverProfile().getId())
                 .collect(Collectors.toSet());
 
-        shiftService.ensureOpenEndedCoverage(from, to, clientProfileId, null, actor);
+        shiftService.ensureOpenEndedCoverage(from, to, clientProfileId, facilityProfileId, actor);
 
         Specification<Shift> filters = ShiftSpecifications.withFilters(
-                null, null, from, to, clientProfileId, null,
+                null, null, from, to, clientProfileId, facilityProfileId,
                 null, null, "billRate", null);
 
         List<Shift> shifts = shiftRepository.findAll(

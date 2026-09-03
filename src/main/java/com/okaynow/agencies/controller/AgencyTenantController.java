@@ -41,7 +41,9 @@ import com.okaynow.shifts.dto.ShiftResponse;
 import com.okaynow.shifts.service.ScheduleCalendarService;
 import com.okaynow.shifts.service.ShiftService;
 import com.okaynow.users.domain.ClientProfile;
+import com.okaynow.users.domain.FacilityProfile;
 import com.okaynow.users.repository.ClientProfileRepository;
+import com.okaynow.users.repository.FacilityProfileRepository;
 import com.okaynow.users.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -89,6 +91,7 @@ public class AgencyTenantController {
     private final ScheduleCalendarService scheduleCalendarService;
     private final ShiftService shiftService;
     private final ClientProfileRepository clientProfileRepository;
+    private final FacilityProfileRepository facilityProfileRepository;
 
     @GetMapping
     public ResponseEntity<AgencyMeResponse> me(Authentication authentication) {
@@ -314,11 +317,13 @@ public class AgencyTenantController {
             Authentication authentication,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @RequestParam UUID clientProfileId) {
+            @RequestParam(required = false) UUID clientProfileId,
+            @RequestParam(required = false) UUID facilityProfileId) {
         return ResponseEntity.ok(scheduleCalendarService.agencyCalendar(
                 from,
                 to,
                 clientProfileId,
+                facilityProfileId,
                 userService.getByEmail(authentication.getName())));
     }
 
@@ -345,6 +350,38 @@ public class AgencyTenantController {
                 client.getZip(),
                 client.getLat(),
                 client.getLng(),
+                null,
+                null,
+                body.notes(),
+                body.scheduleType(),
+                body.requiredHeadcount(),
+                body.assignFromRoster() != null ? body.assignFromRoster() : Boolean.FALSE);
+        return shiftService.create(request, userService.getByEmail(authentication.getName()));
+    }
+
+    @PostMapping("/facilities/{facilityProfileId}/shifts")
+    @ResponseStatus(HttpStatus.CREATED)
+    public CreateShiftResponse createFacilityShift(
+            Authentication authentication,
+            @PathVariable UUID facilityProfileId,
+            @Valid @RequestBody AgencyClientShiftRequest body) {
+        FacilityProfile facility = facilityProfileRepository.findById(facilityProfileId)
+                .orElseThrow(() -> new com.okaynow.common.exception.ResourceNotFoundException(
+                        "Facility not found"));
+        CreateShiftRequest request = new CreateShiftRequest(
+                null,
+                facilityProfileId,
+                body.requiredQualification(),
+                body.date(),
+                body.endDate(),
+                body.startTime(),
+                body.endTime(),
+                facility.getAddressLine(),
+                facility.getCity(),
+                facility.getState() != null ? facility.getState() : "MA",
+                facility.getZip(),
+                facility.getLat(),
+                facility.getLng(),
                 null,
                 null,
                 body.notes(),

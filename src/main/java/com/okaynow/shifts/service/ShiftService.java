@@ -150,28 +150,48 @@ public class ShiftService {
                 throw new BadRequestException("Facility site address is required");
             }
         } else if (actor.getRole() == Role.AGENCY_ADMIN) {
-            if (request.facilityProfileId() != null) {
-                throw new BadRequestException("Agencies schedule for connected family homes only");
-            }
-            if (request.clientProfileId() == null) {
-                throw new BadRequestException("clientProfileId is required");
-            }
             agencyId = agencyAccessService.requireWritableAgencyId(actor.getId());
-            client = clientProfileRepository.findById(request.clientProfileId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Client not found"));
-            homeAgencyConnectionService.assertActiveConnectionForClientProfile(agencyId, client.getId());
-            if (client.getAddressLine() == null || client.getAddressLine().isBlank()
-                    || client.getCity() == null || client.getCity().isBlank()
-                    || client.getZip() == null || client.getZip().isBlank()) {
-                throw new BadRequestException("The selected home must have a complete service address");
+            if (request.clientProfileId() != null && request.facilityProfileId() != null) {
+                throw new BadRequestException(
+                        "A shift cannot belong to both a family home and a facility");
             }
-            clientId = client.getId();
-            addressLine = client.getAddressLine();
-            city = client.getCity();
-            state = client.getState();
-            zip = client.getZip();
-            lat = client.getLat();
-            lng = client.getLng();
+            if (request.clientProfileId() != null) {
+                client = clientProfileRepository.findById(request.clientProfileId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Client not found"));
+                homeAgencyConnectionService.assertActiveConnectionForClientProfile(
+                        agencyId, client.getId());
+                if (client.getAddressLine() == null || client.getAddressLine().isBlank()
+                        || client.getCity() == null || client.getCity().isBlank()
+                        || client.getZip() == null || client.getZip().isBlank()) {
+                    throw new BadRequestException("The selected home must have a complete service address");
+                }
+                clientId = client.getId();
+                addressLine = client.getAddressLine();
+                city = client.getCity();
+                state = client.getState();
+                zip = client.getZip();
+                lat = client.getLat();
+                lng = client.getLng();
+            } else if (request.facilityProfileId() != null) {
+                facility = facilityProfileRepository.findById(request.facilityProfileId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Facility not found"));
+                homeAgencyConnectionService.assertActiveConnectionForFacilityProfile(
+                        agencyId, facility.getId());
+                if (facility.getAddressLine() == null || facility.getAddressLine().isBlank()
+                        || facility.getCity() == null || facility.getCity().isBlank()
+                        || facility.getZip() == null || facility.getZip().isBlank()) {
+                    throw new BadRequestException("The selected facility must have a complete service address");
+                }
+                facilityId = facility.getId();
+                addressLine = facility.getAddressLine();
+                city = facility.getCity();
+                state = facility.getState() != null ? facility.getState() : "MA";
+                zip = facility.getZip();
+                lat = facility.getLat();
+                lng = facility.getLng();
+            } else {
+                throw new BadRequestException("clientProfileId or facilityProfileId is required");
+            }
         } else if (actor.getRole() == Role.ADMIN) {
             if (request.clientProfileId() != null && request.facilityProfileId() != null) {
                 throw new BadRequestException("A shift cannot belong to both a family client and a facility");
@@ -466,12 +486,18 @@ public class ShiftService {
         } else if (actor.getRole() == Role.CLIENT) {
             seriesIds = shiftRepository.findOpenEndedSeriesIds(clientProfileId, null);
         } else if (actor.getRole() == Role.AGENCY_ADMIN) {
-            if (clientProfileId == null) {
+            UUID agencyId = agencyAccessService.requireAgencyForUser(actor.getId()).getId();
+            if (clientProfileId != null) {
+                homeAgencyConnectionService.assertActiveConnectionForClientProfile(
+                        agencyId, clientProfileId);
+                seriesIds = shiftRepository.findOpenEndedSeriesIds(clientProfileId, null);
+            } else if (facilityProfileId != null) {
+                homeAgencyConnectionService.assertActiveConnectionForFacilityProfile(
+                        agencyId, facilityProfileId);
+                seriesIds = shiftRepository.findOpenEndedSeriesIds(null, facilityProfileId);
+            } else {
                 return;
             }
-            UUID agencyId = agencyAccessService.requireAgencyForUser(actor.getId()).getId();
-            homeAgencyConnectionService.assertActiveConnectionForClientProfile(agencyId, clientProfileId);
-            seriesIds = shiftRepository.findOpenEndedSeriesIds(clientProfileId, null);
         } else if (actor.getRole() == Role.ADMIN) {
             seriesIds = shiftRepository.findOpenEndedSeriesIds(clientProfileId, facilityProfileId);
         } else {

@@ -12,6 +12,7 @@ import com.okaynow.connections.dto.ConnectAgencyRequest;
 import com.okaynow.connections.dto.HomeAgencyConnectionResponse;
 import com.okaynow.connections.repository.HomeAgencyConnectionRepository;
 import com.okaynow.users.domain.ClientProfile;
+import com.okaynow.users.domain.FacilityProfile;
 import com.okaynow.users.domain.Role;
 import com.okaynow.users.domain.User;
 import com.okaynow.users.repository.ClientProfileRepository;
@@ -134,6 +135,15 @@ public class HomeAgencyConnectionService {
         }
     }
 
+    public void assertActiveConnectionForFacilityProfile(UUID agencyId, UUID facilityProfileId) {
+        FacilityProfile facility = facilityProfileRepository.findById(facilityProfileId)
+                .orElseThrow(() -> new ResourceNotFoundException("Facility not found"));
+        if (!hasActiveConnection(facility.getUser().getId(), agencyId)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "No active connection with this facility");
+        }
+    }
+
     private User requireHomeUser(UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -149,11 +159,13 @@ public class HomeAgencyConnectionService {
         String homeFirst = null;
         String homeLast = null;
         UUID clientProfileId = null;
+        UUID facilityProfileId = null;
         User homeUser = connection.getHomeUser();
         if (homeUser.getRole() == Role.FACILITY) {
             var facility = facilityProfileRepository.findByUserId(homeUser.getId());
             if (facility.isPresent()) {
                 homeFirst = facility.get().getFacilityName();
+                facilityProfileId = facility.get().getId();
             }
         } else {
             var profile = clientProfileRepository.findByUserId(homeUser.getId());
@@ -172,6 +184,7 @@ public class HomeAgencyConnectionService {
                 agency.getState(),
                 connection.getHomeUser().getId(),
                 clientProfileId,
+                facilityProfileId,
                 homeFirst,
                 homeLast,
                 connection.getStatus(),

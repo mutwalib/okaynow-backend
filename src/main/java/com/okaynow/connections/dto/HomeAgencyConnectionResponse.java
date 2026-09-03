@@ -14,6 +14,7 @@ public record HomeAgencyConnectionResponse(
         String agencyState,
         UUID homeUserId,
         UUID clientProfileId,
+        UUID facilityProfileId,
         String homeFirstName,
         String homeLastName,
         ConnectionStatus status,

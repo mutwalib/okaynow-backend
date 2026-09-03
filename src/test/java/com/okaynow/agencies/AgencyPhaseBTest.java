@@ -179,10 +179,11 @@ class AgencyPhaseBTest {
         MvcResult shifts = mockMvc.perform(get("/api/agencies/me/shifts")
                         .header("Authorization", "Bearer " + agencyToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").isNotEmpty())
                 .andReturn();
-        String shiftId = objectMapper.readTree(shifts.getResponse().getContentAsString())
-                .get(0).get("id").asText();
+        JsonNode firstShift = objectMapper.readTree(shifts.getResponse().getContentAsString()).get(0);
+        String shiftId = firstShift.hasNonNull("id")
+                ? firstShift.get("id").asText()
+                : firstShift.get("shift").get("id").asText();
 
         mockMvc.perform(post("/api/agencies/me/shifts/" + shiftId + "/assign")
                         .header("Authorization", "Bearer " + agencyToken)
@@ -193,9 +194,23 @@ class AgencyPhaseBTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.caregiverProfileId").value(caregiverProfileId));
 
+        mockMvc.perform(get("/api/agencies/me/shifts")
+                        .header("Authorization", "Bearer " + agencyToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].assignments[0].caregiverProfileId").value(caregiverProfileId));
+
         mockMvc.perform(post("/api/shifts/" + shiftId + "/claim")
                         .header("Authorization", "Bearer " + caregiverToken))
                 .andExpect(status().isConflict());
+
+        mockMvc.perform(post("/api/agencies/me/shifts/" + shiftId + "/unassign")
+                        .header("Authorization", "Bearer " + agencyToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"caregiverProfileId":"%s"}
+                                """.formatted(caregiverProfileId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
     }
 
     private void setCaregiverQualifications(String token, String... qualifications) throws Exception {

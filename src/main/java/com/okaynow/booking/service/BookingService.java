@@ -1171,11 +1171,33 @@ public class BookingService {
      * or DRAFT (private assignment never released).
      */
     @Transactional
-    public ShiftClaimResponse unassign(UUID shiftId, String adminEmail) {
-        ShiftClaim claim = shiftClaimRepository
-                .findFirstByShiftIdAndStatusIn(shiftId, ACTIVE_CLAIM_STATUSES)
-                .orElseThrow(() -> new ConflictException("No active caregiver assignment to remove"));
-        User actor = userService.getByEmail(adminEmail);
+    public ShiftClaimResponse unassign(UUID shiftId, String actorEmail) {
+        return unassign(shiftId, null, actorEmail);
+    }
+
+    @Transactional
+    public ShiftClaimResponse unassign(UUID shiftId, UUID caregiverProfileId, String actorEmail) {
+        Shift shift = lockShift(shiftId);
+        if (shift.getStatus() == ShiftStatus.IN_PROGRESS
+                || shift.getStatus() == ShiftStatus.COMPLETED
+                || shift.getStatus() == ShiftStatus.CANCELLED
+                || shift.getStatus() == ShiftStatus.NO_SHOW) {
+            throw new ConflictException("This shift can no longer be unassigned");
+        }
+        ShiftClaim claim;
+        if (caregiverProfileId != null) {
+            claim = shiftClaimRepository
+                    .findFirstByShiftIdAndCaregiverProfileIdAndStatusIn(
+                            shiftId, caregiverProfileId, ACTIVE_CLAIM_STATUSES)
+                    .orElseThrow(() -> new ConflictException(
+                            "That caregiver is not assigned to this shift"));
+        } else {
+            claim = shiftClaimRepository
+                    .findFirstByShiftIdAndStatusIn(shiftId, ACTIVE_CLAIM_STATUSES)
+                    .orElseThrow(() -> new ConflictException(
+                            "No active caregiver assignment to remove"));
+        }
+        User actor = userService.getByEmail(actorEmail);
         ShiftClaimResponse response = cancel(claim.getId(), "Unassigned by agency");
         auditLogService.record(actor, AuditAction.CAREGIVER_ASSIGNED_TO_SHIFT, "SHIFT",
                 shiftId, lockShift(shiftId).getClientProfileId(),

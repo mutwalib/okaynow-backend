@@ -2,12 +2,14 @@ package com.okaynow.agencies.controller;
 
 import com.okaynow.agencies.dto.AgencyMeResponse;
 import com.okaynow.agencies.dto.AssignAgencyShiftRequest;
+import com.okaynow.agencies.dto.AgencyShiftCardResponse;
 import com.okaynow.agencies.dto.BroadcastAgencyShiftRequest;
 import com.okaynow.agencies.dto.BroadcastAgencyShiftResponse;
 import com.okaynow.agencies.dto.CheckoutSessionResponse;
 import com.okaynow.agencies.dto.ConnectOnboardingResponse;
 import com.okaynow.agencies.dto.ConnectStatusResponse;
 import com.okaynow.agencies.dto.CreateCheckoutSessionRequest;
+import com.okaynow.agencies.dto.UnassignAgencyShiftRequest;
 import com.okaynow.agencies.dto.UpdateAgencyDirectoryProfileRequest;
 import com.okaynow.agencies.service.AgencyHoursExportService;
 import com.okaynow.agencies.service.AgencyService;
@@ -287,7 +289,7 @@ public class AgencyTenantController {
     }
 
     @GetMapping("/shifts")
-    public ResponseEntity<List<ShiftResponse>> shifts(Authentication authentication) {
+    public ResponseEntity<List<AgencyShiftCardResponse>> shifts(Authentication authentication) {
         return ResponseEntity.ok(agencyShiftService.listForAgency(currentUserId(authentication)));
     }
 
@@ -298,6 +300,16 @@ public class AgencyTenantController {
             @Valid @RequestBody AssignAgencyShiftRequest request) {
         return ResponseEntity.ok(
                 agencyShiftService.assign(currentUserId(authentication), shiftId, request));
+    }
+
+    @PostMapping("/shifts/{shiftId}/unassign")
+    public ResponseEntity<ShiftClaimResponse> unassignShift(
+            Authentication authentication,
+            @PathVariable UUID shiftId,
+            @Valid @RequestBody UnassignAgencyShiftRequest request) {
+        return ResponseEntity.ok(
+                agencyShiftService.unassign(
+                        currentUserId(authentication), shiftId, request.caregiverProfileId()));
     }
 
     @PostMapping("/shifts/{shiftId}/broadcast")

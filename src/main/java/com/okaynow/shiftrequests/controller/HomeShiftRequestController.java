@@ -24,7 +24,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/home/shift-requests")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('CLIENT')")
+@PreAuthorize("hasAnyRole('CLIENT', 'FACILITY')")
 public class HomeShiftRequestController {
 
     private final ShiftRequestService shiftRequestService;

@@ -213,6 +213,114 @@ class AgencyPhaseBTest {
                 .andExpect(jsonPath("$.status").value("CANCELLED"));
     }
 
+    @Test
+    void facilityScheduleOpeningRoutesToSelectedAgencies() throws Exception {
+        Agency agency = agencyRepository.findBySlug("north-shore-home-care").orElseThrow();
+        User admin = userRepository.findByEmail("northshore-admin@example.com").orElseThrow();
+        String agencyToken = issueToken(admin);
+
+        String facilityEmail = registerFacilityUser();
+        String facilityToken = loginAs(facilityEmail);
+
+        MvcResult created = mockMvc.perform(post("/api/shifts")
+                        .header("Authorization", "Bearer " + facilityToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "requiredQualification":"PCA",
+                                  "date":"2030-10-16",
+                                  "startTime":"09:00:00",
+                                  "endTime":"13:00:00",
+                                  "addressLine":"100 Main St",
+                                  "city":"Boston",
+                                  "state":"MA",
+                                  "zip":"02108"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String shiftId = objectMapper.readTree(created.getResponse().getContentAsString())
+                .get("shifts").get(0).get("id").asText();
+
+        mockMvc.perform(post("/api/shifts/" + shiftId + "/request-replacement")
+                        .header("Authorization", "Bearer " + facilityToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"Need evening coverage","slots":1}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        MvcResult connect = mockMvc.perform(post("/api/home/agencies/" + agency.getId() + "/connect-request")
+                        .header("Authorization", "Bearer " + facilityToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String connectionId = objectMapper.readTree(connect.getResponse().getContentAsString())
+                .get("id").asText();
+        mockMvc.perform(post("/api/agencies/me/connections/" + connectionId + "/accept")
+                        .header("Authorization", "Bearer " + agencyToken))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/shifts/" + shiftId + "/request-replacement")
+                        .header("Authorization", "Bearer " + facilityToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason":"Need PCA coverage",
+                                  "slots":1,
+                                  "agencyIds":["%s"]
+                                }
+                                """.formatted(agency.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.agencyCoverageRequested").value(true))
+                .andExpect(jsonPath("$.marketplacePosted").value(false));
+
+        MvcResult inbox = mockMvc.perform(get("/api/agencies/me/shift-requests")
+                        .header("Authorization", "Bearer " + agencyToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].fromFacility").value(true))
+                .andExpect(jsonPath("$[0].facilityName").value("Bayview Adult Day"))
+                .andExpect(jsonPath("$[0].status").value("PENDING"))
+                .andReturn();
+        String inboxId = objectMapper.readTree(inbox.getResponse().getContentAsString())
+                .get(0).get("id").asText();
+
+        mockMvc.perform(post("/api/agencies/me/shift-requests/" + inboxId + "/accept")
+                        .header("Authorization", "Bearer " + agencyToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("FULFILLED"))
+                .andExpect(jsonPath("$.targetAgencies[0].createdShiftId").value(shiftId));
+
+        mockMvc.perform(get("/api/agencies/me/shifts")
+                        .header("Authorization", "Bearer " + agencyToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].id").value(org.hamcrest.Matchers.hasItem(shiftId)));
+    }
+
+    private String registerFacilityUser() throws Exception {
+        String email = "facility+" + System.nanoTime() + "@example.com";
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email":"%s",
+                                  "password":"password123",
+                                  "role":"FACILITY",
+                                  "firstName":"Site",
+                                  "lastName":"Manager",
+                                  "facilityName":"Bayview Adult Day",
+                                  "addressLine":"100 Main St",
+                                  "city":"Boston",
+                                  "state":"MA",
+                                  "zip":"02108",
+                                  "acceptedLegalDocumentIds":%s
+                                }
+                                """.formatted(email, legalIdsJson())))
+                .andExpect(status().isCreated());
+        return email;
+    }
+
     private void setCaregiverQualifications(String token, String... qualifications) throws Exception {
         StringBuilder quals = new StringBuilder();
         for (String q : qualifications) {

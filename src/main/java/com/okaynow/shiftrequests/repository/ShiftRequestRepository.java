@@ -5,6 +5,7 @@ import com.okaynow.shiftrequests.domain.ShiftRequestStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface ShiftRequestRepository extends JpaRepository<ShiftRequest, UUID> {
@@ -13,4 +14,7 @@ public interface ShiftRequestRepository extends JpaRepository<ShiftRequest, UUID
 
     List<ShiftRequest> findByHomeUserIdAndStatusOrderByCreatedAtDesc(
             UUID homeUserId, ShiftRequestStatus status);
+
+    Optional<ShiftRequest> findFirstBySourceShiftIdAndStatus(
+            UUID sourceShiftId, ShiftRequestStatus status);
 }

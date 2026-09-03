@@ -127,6 +127,14 @@ public class Shift {
     private boolean marketplacePosted = false;
 
     /**
+     * Facility calendar opening was routed to connected agencies (not the public
+     * marketplace).
+     */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    @Builder.Default
+    private boolean agencyCoverageRequested = false;
+
+    /**
      * How many slots are currently open for marketplace claims.
      * Clients choose this when posting coverage (partial remaining headcount).
      */

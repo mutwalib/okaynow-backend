@@ -30,11 +30,16 @@ public record ScheduleShiftCardResponse(
         String notes,
         List<ScheduleRosterSlotResponse> roster,
         /** True when the viewing agency created this shift (agency calendar only). */
-        Boolean agencyManaged
+        Boolean agencyManaged,
+        /** Facility opening was sent to connected agencies. */
+        Boolean agencyCoverageRequested
 ) {
     public ScheduleShiftCardResponse {
         if (agencyManaged == null) {
             agencyManaged = false;
+        }
+        if (agencyCoverageRequested == null) {
+            agencyCoverageRequested = false;
         }
     }
 }

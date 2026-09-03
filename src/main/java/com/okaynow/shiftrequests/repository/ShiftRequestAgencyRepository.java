@@ -21,7 +21,9 @@ public interface ShiftRequestAgencyRepository extends JpaRepository<ShiftRequest
     @Query("""
             SELECT sra FROM ShiftRequestAgency sra
             JOIN FETCH sra.shiftRequest sr
-            JOIN FETCH sr.clientProfile
+            JOIN FETCH sr.homeUser
+            LEFT JOIN FETCH sr.clientProfile
+            LEFT JOIN FETCH sr.facilityProfile
             WHERE sra.agency.id = :agencyId
             ORDER BY sr.createdAt DESC
             """)

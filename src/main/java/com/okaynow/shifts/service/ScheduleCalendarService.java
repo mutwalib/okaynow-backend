@@ -177,7 +177,8 @@ public class ScheduleCalendarService {
                     needsCoverage,
                     shift.getNotes(),
                     roster,
-                    false);
+                    false,
+                    shift.isAgencyCoverageRequested());
 
             byDay.computeIfAbsent(shift.getDate(), ignored -> new ArrayList<>()).add(card);
         }
@@ -288,7 +289,8 @@ public class ScheduleCalendarService {
                     needsCoverage,
                     shift.getNotes(),
                     roster,
-                    shift.getAgencyId() != null && shift.getAgencyId().equals(agency.getId()));
+                    shift.getAgencyId() != null && shift.getAgencyId().equals(agency.getId()),
+                    shift.isAgencyCoverageRequested());
 
             byDay.computeIfAbsent(shift.getDate(), ignored -> new ArrayList<>()).add(card);
         }

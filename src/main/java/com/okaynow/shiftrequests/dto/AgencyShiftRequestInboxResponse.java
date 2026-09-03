@@ -27,6 +27,9 @@ public record AgencyShiftRequestInboxResponse(
         String zip,
         String notes,
         Instant createdAt,
-        UUID createdShiftId
+        UUID createdShiftId,
+        boolean fromFacility,
+        String facilityName,
+        int requiredHeadcount
 ) {
 }

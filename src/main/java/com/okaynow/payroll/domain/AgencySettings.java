@@ -106,7 +106,7 @@ public class AgencySettings {
     @Builder.Default
     private BigDecimal platformConversionFee = new BigDecimal("500.00");
 
-    /** How accepted home requests are routed to caregivers. */
+    /** How accepted home/facility requests are routed to caregivers. */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 24)
     @Builder.Default

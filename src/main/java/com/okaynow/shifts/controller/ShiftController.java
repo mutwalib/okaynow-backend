@@ -13,6 +13,7 @@ import com.okaynow.shifts.dto.RequestReplacementRequest;
 import com.okaynow.shifts.dto.ShiftResponse;
 import com.okaynow.shifts.dto.UpdateShiftRequest;
 import com.okaynow.shifts.dto.UpdatePlatformPaymentRequest;
+import com.okaynow.shiftrequests.service.ShiftRequestService;
 import com.okaynow.shifts.service.ShiftService;
 import com.okaynow.users.domain.Qualification;
 import com.okaynow.users.domain.Role;
@@ -48,6 +49,7 @@ public class ShiftController {
 
     private final ShiftService shiftService;
     private final BookingService bookingService;
+    private final ShiftRequestService shiftRequestService;
     private final UserService userService;
 
     @GetMapping
@@ -95,10 +97,17 @@ public class ShiftController {
             @PathVariable UUID id,
             @RequestBody(required = false) RequestReplacementRequest request,
             Authentication authentication) {
+        var actor = userService.getByEmail(authentication.getName());
         String reason = request != null ? request.reason() : null;
         Integer slots = request != null ? request.slots() : null;
-        return ResponseEntity.ok(bookingService.requestReplacement(
-                id, reason, slots, userService.getByEmail(authentication.getName())));
+        if (actor.getRole() == Role.FACILITY) {
+            List<UUID> agencyIds = request != null && request.agencyIds() != null
+                    ? request.agencyIds()
+                    : List.of();
+            shiftRequestService.openFromFacilityShift(id, actor, agencyIds, reason, slots);
+            return ResponseEntity.ok(shiftService.getById(id, actor));
+        }
+        return ResponseEntity.ok(bookingService.requestReplacement(id, reason, slots, actor));
     }
 
     @PostMapping("/{id}/close-marketplace")

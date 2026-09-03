@@ -39,6 +39,7 @@ public record ShiftResponse(
         int surgeTierApplied,
         int escalationRadiusBonusMiles,
         UUID createdBy,
-        Instant createdAt
+        Instant createdAt,
+        boolean agencyCoverageRequested
 ) {
 }

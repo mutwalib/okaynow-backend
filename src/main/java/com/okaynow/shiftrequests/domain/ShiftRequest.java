@@ -1,6 +1,7 @@
 package com.okaynow.shiftrequests.domain;
 
 import com.okaynow.users.domain.ClientProfile;
+import com.okaynow.users.domain.FacilityProfile;
 import com.okaynow.users.domain.Qualification;
 import com.okaynow.users.domain.User;
 import jakarta.persistence.Column;
@@ -46,9 +47,23 @@ public class ShiftRequest {
     @JoinColumn(name = "home_user_id", nullable = false)
     private User homeUser;
 
-    @ManyToOne(optional = false, fetch = FetchType.LAZY)
-    @JoinColumn(name = "client_profile_id", nullable = false)
+    /** Home-posted needs; null when the requester is a facility. */
+    @ManyToOne(optional = true, fetch = FetchType.LAZY)
+    @JoinColumn(name = "client_profile_id")
     private ClientProfile clientProfile;
+
+    /** Facility-posted needs; null when the requester is a home. */
+    @ManyToOne(optional = true, fetch = FetchType.LAZY)
+    @JoinColumn(name = "facility_profile_id")
+    private FacilityProfile facilityProfile;
+
+    /** Facility calendar shift this opening was sent from, when applicable. */
+    @Column(name = "source_shift_id")
+    private UUID sourceShiftId;
+
+    @Column(nullable = false, columnDefinition = "integer default 1")
+    @Builder.Default
+    private int requiredHeadcount = 1;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

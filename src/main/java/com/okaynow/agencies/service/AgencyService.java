@@ -120,7 +120,8 @@ public class AgencyService {
             agency.setPublicDescription(request.publicDescription().trim());
         }
         if (request.qualificationsSupported() != null) {
-            agency.setQualificationsSupported(new HashSet<>(request.qualificationsSupported()));
+            agency.getQualificationsSupported().clear();
+            agency.getQualificationsSupported().addAll(request.qualificationsSupported());
         }
         if (request.directoryListed() != null) {
             agency.setDirectoryListed(request.directoryListed());

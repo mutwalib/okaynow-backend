@@ -15,6 +15,7 @@ import com.okaynow.users.domain.ClientProfile;
 import com.okaynow.users.domain.Role;
 import com.okaynow.users.domain.User;
 import com.okaynow.users.repository.ClientProfileRepository;
+import com.okaynow.users.repository.FacilityProfileRepository;
 import com.okaynow.users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,7 @@ public class HomeAgencyConnectionService {
     private final AgencyRepository agencyRepository;
     private final UserRepository userRepository;
     private final ClientProfileRepository clientProfileRepository;
+    private final FacilityProfileRepository facilityProfileRepository;
     private final AgencyAccessService agencyAccessService;
 
     @Transactional
@@ -135,8 +137,9 @@ public class HomeAgencyConnectionService {
     private User requireHomeUser(UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-        if (user.getRole() != Role.CLIENT) {
-            throw new BadRequestException("Only home accounts can manage agency connections");
+        if (user.getRole() != Role.CLIENT && user.getRole() != Role.FACILITY) {
+            throw new BadRequestException(
+                    "Only home or facility accounts can manage agency connections");
         }
         return user;
     }
@@ -146,11 +149,19 @@ public class HomeAgencyConnectionService {
         String homeFirst = null;
         String homeLast = null;
         UUID clientProfileId = null;
-        var profile = clientProfileRepository.findByUserId(connection.getHomeUser().getId());
-        if (profile.isPresent()) {
-            homeFirst = profile.get().getFirstName();
-            homeLast = profile.get().getLastName();
-            clientProfileId = profile.get().getId();
+        User homeUser = connection.getHomeUser();
+        if (homeUser.getRole() == Role.FACILITY) {
+            var facility = facilityProfileRepository.findByUserId(homeUser.getId());
+            if (facility.isPresent()) {
+                homeFirst = facility.get().getFacilityName();
+            }
+        } else {
+            var profile = clientProfileRepository.findByUserId(homeUser.getId());
+            if (profile.isPresent()) {
+                homeFirst = profile.get().getFirstName();
+                homeLast = profile.get().getLastName();
+                clientProfileId = profile.get().getId();
+            }
         }
         return new HomeAgencyConnectionResponse(
                 connection.getId(),

@@ -145,6 +145,21 @@ class AgencyPhaseATest {
     }
 
     @Test
+    void facilityCanRequestAgencyConnection() throws Exception {
+        Agency agency = agencyRepository.findBySlug("north-shore-home-care").orElseThrow();
+        String facilityToken = loginAs(registerFacilityUser());
+
+        mockMvc.perform(post("/api/home/agencies/" + agency.getId() + "/connect-request")
+                        .header("Authorization", "Bearer " + facilityToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"message":"Evening PCA coverage"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("PENDING"));
+    }
+
+    @Test
     void agencyAdminCanAcceptHomeConnection() throws Exception {
         Agency agency = agencyRepository.findBySlug("north-shore-home-care").orElseThrow();
         String homeToken = loginAs(registerUser("CLIENT", null));
@@ -165,6 +180,29 @@ class AgencyPhaseATest {
                         .header("Authorization", "Bearer " + agencyToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
+    }
+
+    private String registerFacilityUser() throws Exception {
+        String email = "facility+" + System.nanoTime() + "@example.com";
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email":"%s",
+                                  "password":"password123",
+                                  "role":"FACILITY",
+                                  "firstName":"Site",
+                                  "lastName":"Manager",
+                                  "facilityName":"Bayview Adult Day",
+                                  "addressLine":"100 Main St",
+                                  "city":"Boston",
+                                  "state":"MA",
+                                  "zip":"02108",
+                                  "acceptedLegalDocumentIds":%s
+                                }
+                                """.formatted(email, legalIdsJson())))
+                .andExpect(status().isCreated());
+        return email;
     }
 
     private String registerUser(String role, String agencyName) throws Exception {

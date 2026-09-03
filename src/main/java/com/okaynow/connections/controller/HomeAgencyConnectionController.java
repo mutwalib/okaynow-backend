@@ -25,7 +25,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/home/agencies")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('CLIENT')")
+@PreAuthorize("hasAnyRole('CLIENT', 'FACILITY')")
 public class HomeAgencyConnectionController {
 
     private final HomeAgencyConnectionService connectionService;

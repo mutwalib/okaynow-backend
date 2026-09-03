@@ -28,6 +28,13 @@ public record ScheduleShiftCardResponse(
         /** True when marketplace seats are open for claims. */
         boolean needsCoverage,
         String notes,
-        List<ScheduleRosterSlotResponse> roster
+        List<ScheduleRosterSlotResponse> roster,
+        /** True when the viewing agency created this shift (agency calendar only). */
+        Boolean agencyManaged
 ) {
+    public ScheduleShiftCardResponse {
+        if (agencyManaged == null) {
+            agencyManaged = false;
+        }
+    }
 }

@@ -196,7 +196,7 @@ public class ShiftController {
     }
 
     @PatchMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'FACILITY', 'CLIENT')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FACILITY', 'CLIENT', 'AGENCY_ADMIN')")
     public ResponseEntity<ShiftResponse> update(@PathVariable UUID id,
                                                 @Valid @RequestBody UpdateShiftRequest request,
                                                 Authentication authentication) {
@@ -205,7 +205,7 @@ public class ShiftController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'FACILITY', 'CLIENT')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'FACILITY', 'CLIENT', 'AGENCY_ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable UUID id, Authentication authentication) {
         shiftService.delete(id, userService.getByEmail(authentication.getName()));
         return ResponseEntity.noContent().build();

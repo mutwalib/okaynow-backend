@@ -1,5 +1,6 @@
 package com.okaynow.shifts.service;
 
+import com.okaynow.agencies.support.AgencyAccessService;
 import com.okaynow.audit.domain.AuditAction;
 import com.okaynow.audit.service.AuditLogService;
 import com.okaynow.booking.domain.ClaimSource;
@@ -13,6 +14,7 @@ import com.okaynow.common.exception.BadRequestException;
 import com.okaynow.common.exception.ConflictException;
 import com.okaynow.common.exception.ResourceNotFoundException;
 import com.okaynow.common.geo.ServiceRegionService;
+import com.okaynow.connections.service.HomeAgencyConnectionService;
 import com.okaynow.evv.support.ShiftWindows;
 import com.okaynow.marketplace.service.MarketplaceEligibilityService;
 import com.okaynow.notifications.domain.NotificationType;
@@ -85,6 +87,8 @@ public class ShiftService {
     private final ClientStaffingService clientStaffingService;
     private final BookingService bookingService;
     private final MarketplaceEligibilityService marketplaceEligibilityService;
+    private final AgencyAccessService agencyAccessService;
+    private final HomeAgencyConnectionService homeAgencyConnectionService;
 
     @Transactional
     public CreateShiftResponse create(CreateShiftRequest request, User actor) {
@@ -96,6 +100,7 @@ public class ShiftService {
         FacilityProfile facility = null;
         UUID clientId = null;
         UUID facilityId = null;
+        UUID agencyId = null;
         String addressLine;
         String city;
         String state;
@@ -138,12 +143,35 @@ public class ShiftService {
             state = blankToNull(request.state()) != null
                     ? request.state()
                     : (facility.getState() != null ? facility.getState() : "MA");
-            zip = blankToNull(request.zip()) != null ? request.zip() : facility.getZip();
+                zip = blankToNull(request.zip()) != null ? request.zip() : facility.getZip();
             lat = request.lat() != null ? request.lat() : facility.getLat();
             lng = request.lng() != null ? request.lng() : facility.getLng();
             if (blankToNull(addressLine) == null || blankToNull(city) == null || blankToNull(zip) == null) {
                 throw new BadRequestException("Facility site address is required");
             }
+        } else if (actor.getRole() == Role.AGENCY_ADMIN) {
+            if (request.facilityProfileId() != null) {
+                throw new BadRequestException("Agencies schedule for connected family homes only");
+            }
+            if (request.clientProfileId() == null) {
+                throw new BadRequestException("clientProfileId is required");
+            }
+            agencyId = agencyAccessService.requireWritableAgencyId(actor.getId());
+            client = clientProfileRepository.findById(request.clientProfileId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Client not found"));
+            homeAgencyConnectionService.assertActiveConnectionForClientProfile(agencyId, client.getId());
+            if (client.getAddressLine() == null || client.getAddressLine().isBlank()
+                    || client.getCity() == null || client.getCity().isBlank()
+                    || client.getZip() == null || client.getZip().isBlank()) {
+                throw new BadRequestException("The selected home must have a complete service address");
+            }
+            clientId = client.getId();
+            addressLine = client.getAddressLine();
+            city = client.getCity();
+            state = client.getState();
+            zip = client.getZip();
+            lat = client.getLat();
+            lng = client.getLng();
         } else if (actor.getRole() == Role.ADMIN) {
             if (request.clientProfileId() != null && request.facilityProfileId() != null) {
                 throw new BadRequestException("A shift cannot belong to both a family client and a facility");
@@ -185,7 +213,7 @@ public class ShiftService {
                 lng = request.lng();
             }
         } else {
-            throw new AccessDeniedException("Only families, facilities, or admins can post shifts");
+            throw new AccessDeniedException("Only families, facilities, agencies, or admins can post shifts");
         }
 
         BigDecimal billRate;
@@ -193,6 +221,14 @@ public class ShiftService {
         if (actor.getRole() == Role.CLIENT || actor.getRole() == Role.FACILITY) {
             // Clients use agency-configured caregiver pay; bill is derived from take %.
             AgencySettings settings = agencySettingsService.getOrCreate();
+            payRate = settings.getDefaultPayRate().setScale(2, java.math.RoundingMode.HALF_UP);
+            try {
+                billRate = settings.billRateFromPayRate(payRate);
+            } catch (IllegalStateException ex) {
+                throw new BadRequestException(ex.getMessage());
+            }
+        } else if (actor.getRole() == Role.AGENCY_ADMIN) {
+            AgencySettings settings = agencySettingsService.getOrCreateForAgency(agencyId);
             payRate = settings.getDefaultPayRate().setScale(2, java.math.RoundingMode.HALF_UP);
             try {
                 billRate = settings.billRateFromPayRate(payRate);
@@ -221,12 +257,14 @@ public class ShiftService {
                 && request.endDate() == null;
         List<LocalDate> dates = expandDates(scheduleType, request.date(), request.endDate());
         UUID seriesId = scheduleType == ShiftScheduleType.DAILY_ROUTINE ? UUID.randomUUID() : null;
+        UUID finalAgencyId = agencyId;
 
         List<Shift> created = new ArrayList<>();
         for (LocalDate day : dates) {
             created.add(Shift.builder()
                     .clientProfileId(clientId)
                     .facilityProfileId(facilityId)
+                    .agencyId(finalAgencyId)
                     .requiredQualification(request.requiredQualification())
                     .date(day)
                     .startTime(request.startTime())
@@ -280,10 +318,10 @@ public class ShiftService {
         }
         created = shiftRepository.saveAll(created);
 
-        // Open-ended daily routines fill from roster by default.
+        // Open-ended daily routines fill from roster by default (client/admin only).
         boolean assignRoster = request.assignFromRoster() != null
                 ? Boolean.TRUE.equals(request.assignFromRoster())
-                : openEnded;
+                : openEnded && actor.getRole() != Role.AGENCY_ADMIN;
         if (assignRoster && clientId != null) {
             assignRosterCaregivers(created, clientId, actor);
             // Reload so filledSlots/status reflect roster assignments.
@@ -427,6 +465,13 @@ public class ShiftService {
                     facility.getId(), actor.getId());
         } else if (actor.getRole() == Role.CLIENT) {
             seriesIds = shiftRepository.findOpenEndedSeriesIds(clientProfileId, null);
+        } else if (actor.getRole() == Role.AGENCY_ADMIN) {
+            if (clientProfileId == null) {
+                return;
+            }
+            UUID agencyId = agencyAccessService.requireAgencyForUser(actor.getId()).getId();
+            homeAgencyConnectionService.assertActiveConnectionForClientProfile(agencyId, clientProfileId);
+            seriesIds = shiftRepository.findOpenEndedSeriesIds(clientProfileId, null);
         } else if (actor.getRole() == Role.ADMIN) {
             seriesIds = shiftRepository.findOpenEndedSeriesIds(clientProfileId, facilityProfileId);
         } else {
@@ -471,6 +516,7 @@ public class ShiftService {
                         .requiredHeadcount(Math.max(1, template.getRequiredHeadcount()))
                         .filledSlots(0)
                         .createdBy(template.getCreatedBy())
+                        .agencyId(template.getAgencyId())
                         .build();
                 if (hasOwnerTimeOverlap(draft, null, seriesId)) {
                     // Another shift already occupies this window — skip this day.
@@ -482,7 +528,7 @@ public class ShiftService {
                 continue;
             }
             created = shiftRepository.saveAll(created);
-            if (template.getClientProfileId() != null) {
+            if (template.getClientProfileId() != null && template.getAgencyId() == null) {
                 assignRosterCaregivers(created, template.getClientProfileId(), actor);
             }
         }
@@ -970,6 +1016,15 @@ public class ShiftService {
             }
             return;
         }
+        if (actor.getRole() == Role.AGENCY_ADMIN) {
+            if (shift.getClientProfileId() == null) {
+                throw new AccessDeniedException("You do not have permission to view this shift");
+            }
+            UUID agencyId = agencyAccessService.requireAgencyForUser(actor.getId()).getId();
+            homeAgencyConnectionService.assertActiveConnectionForClientProfile(
+                    agencyId, shift.getClientProfileId());
+            return;
+        }
         throw new AccessDeniedException("You do not have permission to view this shift");
     }
 
@@ -981,6 +1036,18 @@ public class ShiftService {
             if (!ownsFacilityShift(shift, actor)) {
                 throw new AccessDeniedException("You can only manage shifts for your own facility");
             }
+            return null;
+        }
+        if (actor.getRole() == Role.AGENCY_ADMIN) {
+            UUID agencyId = agencyAccessService.requireWritableAgencyId(actor.getId());
+            if (shift.getAgencyId() == null || !shift.getAgencyId().equals(agencyId)) {
+                throw new AccessDeniedException("Agencies can only edit schedules they created");
+            }
+            if (shift.getClientProfileId() == null) {
+                throw new AccessDeniedException("You cannot manage this shift");
+            }
+            homeAgencyConnectionService.assertActiveConnectionForClientProfile(
+                    agencyId, shift.getClientProfileId());
             return null;
         }
         if (actor.getRole() != Role.CLIENT) {

@@ -11,6 +11,7 @@ import com.okaynow.connections.domain.HomeAgencyConnection;
 import com.okaynow.connections.dto.ConnectAgencyRequest;
 import com.okaynow.connections.dto.HomeAgencyConnectionResponse;
 import com.okaynow.connections.repository.HomeAgencyConnectionRepository;
+import com.okaynow.users.domain.ClientProfile;
 import com.okaynow.users.domain.Role;
 import com.okaynow.users.domain.User;
 import com.okaynow.users.repository.ClientProfileRepository;
@@ -122,6 +123,15 @@ public class HomeAgencyConnectionService {
                 .orElse(false);
     }
 
+    public void assertActiveConnectionForClientProfile(UUID agencyId, UUID clientProfileId) {
+        ClientProfile client = clientProfileRepository.findById(clientProfileId)
+                .orElseThrow(() -> new ResourceNotFoundException("Client not found"));
+        if (!hasActiveConnection(client.getUser().getId(), agencyId)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "No active connection with this home");
+        }
+    }
+
     private User requireHomeUser(UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -135,10 +145,12 @@ public class HomeAgencyConnectionService {
         Agency agency = connection.getAgency();
         String homeFirst = null;
         String homeLast = null;
+        UUID clientProfileId = null;
         var profile = clientProfileRepository.findByUserId(connection.getHomeUser().getId());
         if (profile.isPresent()) {
             homeFirst = profile.get().getFirstName();
             homeLast = profile.get().getLastName();
+            clientProfileId = profile.get().getId();
         }
         return new HomeAgencyConnectionResponse(
                 connection.getId(),
@@ -147,6 +159,8 @@ public class HomeAgencyConnectionService {
                 agency.getDisplayName(),
                 agency.getCity(),
                 agency.getState(),
+                connection.getHomeUser().getId(),
+                clientProfileId,
                 homeFirst,
                 homeLast,
                 connection.getStatus(),

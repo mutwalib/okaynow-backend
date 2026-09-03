@@ -33,7 +33,15 @@ import com.okaynow.roster.service.AgencyRosterService;
 import com.okaynow.shiftrequests.dto.AgencyShiftRequestInboxResponse;
 import com.okaynow.shiftrequests.dto.ShiftRequestResponse;
 import com.okaynow.shiftrequests.service.ShiftRequestService;
+import com.okaynow.shifts.dto.AgencyClientShiftRequest;
+import com.okaynow.shifts.dto.CreateShiftRequest;
+import com.okaynow.shifts.dto.CreateShiftResponse;
+import com.okaynow.shifts.dto.ScheduleDayResponse;
 import com.okaynow.shifts.dto.ShiftResponse;
+import com.okaynow.shifts.service.ScheduleCalendarService;
+import com.okaynow.shifts.service.ShiftService;
+import com.okaynow.users.domain.ClientProfile;
+import com.okaynow.users.repository.ClientProfileRepository;
 import com.okaynow.users.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -78,6 +86,9 @@ public class AgencyTenantController {
     private final ShiftRequestService shiftRequestService;
     private final AgencyShiftService agencyShiftService;
     private final UserService userService;
+    private final ScheduleCalendarService scheduleCalendarService;
+    private final ShiftService shiftService;
+    private final ClientProfileRepository clientProfileRepository;
 
     @GetMapping
     public ResponseEntity<AgencyMeResponse> me(Authentication authentication) {
@@ -296,6 +307,51 @@ public class AgencyTenantController {
                 : new BroadcastAgencyShiftRequest(List.of());
         return ResponseEntity.ok(
                 agencyShiftService.broadcast(currentUserId(authentication), shiftId, body));
+    }
+
+    @GetMapping("/schedule/calendar")
+    public ResponseEntity<List<ScheduleDayResponse>> scheduleCalendar(
+            Authentication authentication,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam UUID clientProfileId) {
+        return ResponseEntity.ok(scheduleCalendarService.agencyCalendar(
+                from,
+                to,
+                clientProfileId,
+                userService.getByEmail(authentication.getName())));
+    }
+
+    @PostMapping("/clients/{clientProfileId}/shifts")
+    @ResponseStatus(HttpStatus.CREATED)
+    public CreateShiftResponse createClientShift(
+            Authentication authentication,
+            @PathVariable UUID clientProfileId,
+            @Valid @RequestBody AgencyClientShiftRequest body) {
+        ClientProfile client = clientProfileRepository.findById(clientProfileId)
+                .orElseThrow(() -> new com.okaynow.common.exception.ResourceNotFoundException(
+                        "Client not found"));
+        CreateShiftRequest request = new CreateShiftRequest(
+                clientProfileId,
+                null,
+                body.requiredQualification(),
+                body.date(),
+                body.endDate(),
+                body.startTime(),
+                body.endTime(),
+                client.getAddressLine(),
+                client.getCity(),
+                client.getState() != null ? client.getState() : "MA",
+                client.getZip(),
+                client.getLat(),
+                client.getLng(),
+                null,
+                null,
+                body.notes(),
+                body.scheduleType(),
+                body.requiredHeadcount(),
+                body.assignFromRoster() != null ? body.assignFromRoster() : Boolean.FALSE);
+        return shiftService.create(request, userService.getByEmail(authentication.getName()));
     }
 
     private UUID currentUserId(Authentication authentication) {

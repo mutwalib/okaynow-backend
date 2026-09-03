@@ -123,6 +123,9 @@ public class AuthService {
                     .registeringForSelf(registeringForSelf)
                     .medicaidEligible(medicaidEligible)
                     .relationshipToCareRecipient(relationship)
+                    .canCreateShifts(true)
+                    .canUpdateShifts(true)
+                    .canDeleteShifts(true)
                     .build());
         } else if (request.role() == Role.FACILITY) {
             if (isBlank(request.facilityName())

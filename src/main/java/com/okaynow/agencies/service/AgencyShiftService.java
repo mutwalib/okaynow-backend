@@ -22,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -40,7 +41,7 @@ public class AgencyShiftService {
     @Transactional(readOnly = true)
     public List<ShiftResponse> listForAgency(UUID agencyUserId) {
         UUID agencyId = agencyAccessService.requireAgencyForUser(agencyUserId).getId();
-        return shiftRepository.findOpenOrAssignedByAgencyId(agencyId).stream()
+        return shiftRepository.findOpenOrAssignedByAgencyId(agencyId, LocalDate.now()).stream()
                 .map(shiftMapper::toResponse)
                 .map(r -> ShiftResponses.forViewer(r, Role.AGENCY_ADMIN))
                 .toList();

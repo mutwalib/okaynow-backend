@@ -133,19 +133,23 @@ public interface ShiftRepository extends JpaRepository<Shift, UUID>, JpaSpecific
     /**
      * Staffing board: opened to roster coverage, already assigned, or created
      * from an accepted home request. Private home-schedule drafts stay off this list.
+     * Upcoming first (soonest date at the top).
      */
     @Query("""
             select s from Shift s
             where s.agencyId = :agencyId
               and s.status <> com.okaynow.shifts.domain.ShiftStatus.CANCELLED
+              and s.date >= :fromDate
               and (
                 s.marketplacePosted = true
                 or s.filledSlots > 0
                 or s.shiftRequestId is not null
               )
-            order by s.date desc, s.startTime desc
+            order by s.date asc, s.startTime asc
             """)
-    List<Shift> findOpenOrAssignedByAgencyId(@Param("agencyId") UUID agencyId);
+    List<Shift> findOpenOrAssignedByAgencyId(
+            @Param("agencyId") UUID agencyId,
+            @Param("fromDate") LocalDate fromDate);
 
     @Query("""
             select s from Shift s

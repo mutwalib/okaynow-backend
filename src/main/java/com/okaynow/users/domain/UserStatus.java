@@ -9,6 +9,11 @@ public enum UserStatus {
      */
     PENDING_REVIEW,
     ACTIVE,
+    /**
+     * Can sign in and finish existing work, but cannot claim or receive new shifts.
+     * Applied automatically after repeated no-show warnings; admins may lift to ACTIVE.
+     */
+    RESTRICTED,
     SUSPENDED,
     DEACTIVATED
 }

@@ -19,6 +19,10 @@ public enum NotificationType {
     SHIFT_REPLACEMENT_REQUESTED,
     CAREGIVER_REJECTED_BY_CLIENT,
     SHIFT_NO_SHOW,
+    /** Formal no-show warning issued to a caregiver (and mirrored to super admins). */
+    CAREGIVER_NO_SHOW_WARNING,
+    /** Caregiver auto-restricted after repeated no-show warnings. */
+    CAREGIVER_AUTO_RESTRICTED,
     PLATFORM_CONVERSION_FEE,
     SHIFT_SURGE_APPLIED,
     SHIFT_ESCALATION_ALERT,

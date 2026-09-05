@@ -231,7 +231,9 @@ public class AuthService {
             return LoginResult.otpRequired(user.getEmail());
         }
 
-        if (user.getStatus() != UserStatus.ACTIVE && user.getStatus() != UserStatus.PENDING_REVIEW) {
+        if (user.getStatus() != UserStatus.ACTIVE
+                && user.getStatus() != UserStatus.PENDING_REVIEW
+                && user.getStatus() != UserStatus.RESTRICTED) {
             throw new BadCredentialsException("Account is not active");
         }
         return LoginResult.tokens(issueTokens(user));
@@ -321,7 +323,8 @@ public class AuthService {
                 .orElseThrow(() -> new BadCredentialsException("Invalid refresh token"));
         if (!user.isEmailVerified()
                 || (user.getStatus() != UserStatus.ACTIVE
-                && user.getStatus() != UserStatus.PENDING_REVIEW)) {
+                && user.getStatus() != UserStatus.PENDING_REVIEW
+                && user.getStatus() != UserStatus.RESTRICTED)) {
             throw new BadCredentialsException("Account is not active");
         }
         return issueTokens(user);

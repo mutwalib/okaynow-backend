@@ -58,6 +58,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private static boolean isAllowedStatus(UserStatus status) {
-        return status == UserStatus.ACTIVE || status == UserStatus.PENDING_REVIEW;
+        return status == UserStatus.ACTIVE
+                || status == UserStatus.PENDING_REVIEW
+                || status == UserStatus.RESTRICTED;
     }
 }

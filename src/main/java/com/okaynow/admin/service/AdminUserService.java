@@ -151,7 +151,7 @@ public class AdminUserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         if (user.getEmail().equalsIgnoreCase(actingAdminEmail)
                 && status != UserStatus.ACTIVE) {
-            throw new BadRequestException("Platform owners cannot suspend or deactivate themselves");
+            throw new BadRequestException("Platform owners cannot change their own account status away from ACTIVE");
         }
         if (status == UserStatus.ACTIVE
                 && (user.getRole() == Role.CAREGIVER || user.getRole() == Role.CLIENT)

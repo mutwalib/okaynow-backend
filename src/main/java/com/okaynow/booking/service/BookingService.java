@@ -14,6 +14,8 @@ import com.okaynow.common.dto.PagedResponse;
 import com.okaynow.common.exception.BadRequestException;
 import com.okaynow.common.exception.ConflictException;
 import com.okaynow.common.exception.ResourceNotFoundException;
+import com.okaynow.discipline.dto.NoShowDisciplineResult;
+import com.okaynow.discipline.service.CaregiverDisciplineService;
 import com.okaynow.evv.service.VisitService;
 import com.okaynow.evv.support.ShiftWindows;
 import com.okaynow.marketplace.domain.QualificationRulePack;
@@ -95,6 +97,7 @@ public class BookingService {
     private final ShiftAgencyLabelService shiftAgencyLabelService;
     private final ShiftLocationService shiftLocationService;
     private final PastShiftExpiryService pastShiftExpiryService;
+    private final CaregiverDisciplineService caregiverDisciplineService;
 
     /**
      * Caregiver claims an OPEN shift. Pessimistic locks are taken on the caregiver profile
@@ -164,6 +167,7 @@ public class BookingService {
     @Transactional
     public ShiftClaimResponse claimAgencyRosterShift(UUID shiftId, String caregiverEmail) {
         CaregiverProfile caregiver = lockCaregiverByEmail(caregiverEmail);
+        assertActiveForNewMarketplaceClaim(caregiver);
         if (!caregiver.isAgencyRosterEnabled()) {
             throw new BadRequestException(
                     "Agency roster shifts are turned off on your profile. "
@@ -228,6 +232,7 @@ public class BookingService {
         // Lock caregiver then shift (same order as claim)
         caregiver = caregiverProfileRepository.findByUserIdForUpdate(caregiver.getUser().getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Caregiver profile not found"));
+        assertNotRestricted(caregiver);
         Shift shift = lockShift(shiftId);
 
         if (shift.getStatus() != ShiftStatus.OPEN
@@ -290,6 +295,7 @@ public class BookingService {
                 .orElseThrow(() -> new ResourceNotFoundException("Caregiver not found"));
         caregiver = caregiverProfileRepository.findByUserIdForUpdate(caregiver.getUser().getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Caregiver profile not found"));
+        assertNotRestricted(caregiver);
         Shift shift = lockShift(shiftId);
         assertCanInvite(actor, shift, caregiverProfileId);
 
@@ -724,7 +730,8 @@ public class BookingService {
         claim.setStatus(ShiftClaimStatus.CANCELLED);
         claim.setReleasedAt(Instant.now());
         claim.setCancelReason(cancelReason);
-        caregiverUserId = claim.getCaregiverProfile().getUser().getId();
+        CaregiverProfile caregiver = claim.getCaregiverProfile();
+        caregiverUserId = caregiver.getUser().getId();
 
         shift.setStatus(ShiftStatus.NO_SHOW);
         shift.setMarketplacePosted(false);
@@ -736,12 +743,25 @@ public class BookingService {
                 shift.getClientProfileId() != null ? shift.getClientProfileId() : shift.getFacilityProfileId(),
                 "claim=%s reason=%s".formatted(claim.getId(), cancelReason));
 
+        NoShowDisciplineResult discipline = caregiverDisciplineService.recordNoShow(
+                caregiver, shift, cancelReason, actor);
+
+        String noShowBody = "The " + shift.getDate() + " shift was marked no-show: " + cancelReason
+                + ". Caregiver warning " + discipline.warningNumber() + " of "
+                + discipline.maxWarnings()
+                + (discipline.restricted()
+                ? ". Account automatically restricted."
+                : ".");
+
         shiftEventPublisher.publish(
                 NotificationType.SHIFT_NO_SHOW,
                 shift,
                 caregiverUserId,
-                "Marked as no-show",
-                "The " + shift.getDate() + " shift was marked no-show: " + cancelReason);
+                discipline.restricted()
+                        ? "Marked as no-show — caregiver restricted"
+                        : "Marked as no-show (warning " + discipline.warningNumber()
+                        + "/" + discipline.maxWarnings() + ")",
+                noShowBody);
 
         return shiftAgencyLabelService.label(shift, shiftMapper.toResponse(shift));
     }
@@ -1501,13 +1521,29 @@ public class BookingService {
     /**
      * New open-board claims require an ACTIVE account. Pending-review caregivers may still
      * fulfill existing claims (clock, release, accept/decline invites) via the access filter.
+     * Restricted accounts cannot take on new marketplace work.
      */
     private static void assertActiveForNewMarketplaceClaim(CaregiverProfile caregiver) {
         User user = caregiver.getUser();
+        if (user != null && user.getStatus() == UserStatus.RESTRICTED) {
+            throw new BadRequestException(
+                    "Your account is restricted after repeated no-show warnings. "
+                            + "You cannot claim new shifts until OkayNow lifts the restriction.");
+        }
         if (user == null || user.getStatus() != UserStatus.ACTIVE) {
             throw new BadRequestException(
                     "Your account is pending OkayNow review. You can manage upcoming shifts you already have, "
                             + "but cannot claim new open shifts until approved.");
+        }
+    }
+
+    /** Blocks assigning / inviting caregivers who are platform-restricted. */
+    private static void assertNotRestricted(CaregiverProfile caregiver) {
+        User user = caregiver.getUser();
+        if (user != null && user.getStatus() == UserStatus.RESTRICTED) {
+            throw new BadRequestException(
+                    "This caregiver is restricted after repeated no-show warnings and cannot "
+                            + "receive new shift assignments until a platform admin lifts the restriction.");
         }
     }
 

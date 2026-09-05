@@ -94,6 +94,7 @@ public class BookingService {
     private final AgencyCaregiverRepository agencyCaregiverRepository;
     private final ShiftAgencyLabelService shiftAgencyLabelService;
     private final ShiftLocationService shiftLocationService;
+    private final PastShiftExpiryService pastShiftExpiryService;
 
     /**
      * Caregiver claims an OPEN shift. Pessimistic locks are taken on the caregiver profile
@@ -497,14 +498,15 @@ public class BookingService {
         return toResponse(claim, true);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public PagedResponse<ShiftClaimResponse> myClaims(String caregiverEmail, Pageable pageable) {
+        pastShiftExpiryService.expireDueShifts();
         User user = userService.getByEmail(caregiverEmail);
         CaregiverProfile caregiver = caregiverProfileRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Caregiver profile not found"));
         return PagedResponse.from(
                 shiftClaimRepository.findByCaregiverProfileId(caregiver.getId(), pageable)
-                        .map(c -> toResponse(c, true)));
+                        .map(c -> toResponse(pastShiftExpiryService.expireClaimIfPast(c), true)));
     }
 
     @Transactional(readOnly = true)
@@ -1423,7 +1425,8 @@ public class BookingService {
         if (shift.getStatus() == ShiftStatus.CANCELLED
                 || shift.getStatus() == ShiftStatus.COMPLETED
                 || shift.getStatus() == ShiftStatus.IN_PROGRESS
-                || shift.getStatus() == ShiftStatus.NO_SHOW) {
+                || shift.getStatus() == ShiftStatus.NO_SHOW
+                || shift.getStatus() == ShiftStatus.EXPIRED) {
             shift.setFilledSlots((int) activeClaimCount(shift.getId()));
             return;
         }

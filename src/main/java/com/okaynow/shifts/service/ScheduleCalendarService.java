@@ -49,7 +49,11 @@ public class ScheduleCalendarService {
     private static final Set<ShiftClaimStatus> ROSTER_STATUSES =
             EnumSet.of(ShiftClaimStatus.PENDING, ShiftClaimStatus.CONFIRMED);
     private static final Set<ShiftStatus> TERMINAL =
-            EnumSet.of(ShiftStatus.COMPLETED, ShiftStatus.CANCELLED, ShiftStatus.NO_SHOW);
+            EnumSet.of(
+                    ShiftStatus.COMPLETED,
+                    ShiftStatus.CANCELLED,
+                    ShiftStatus.NO_SHOW,
+                    ShiftStatus.EXPIRED);
 
     private final ShiftRepository shiftRepository;
     private final ShiftClaimRepository shiftClaimRepository;

@@ -4,5 +4,7 @@ public enum ShiftClaimStatus {
     PENDING,
     CONFIRMED,
     CANCELLED,
-    COMPLETED
+    COMPLETED,
+    /** Shift window ended without completion / cancellation. */
+    EXPIRED
 }

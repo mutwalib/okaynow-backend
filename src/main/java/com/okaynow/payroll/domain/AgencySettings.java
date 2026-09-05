@@ -113,8 +113,8 @@ public class AgencySettings {
     private ShiftRoutingMode shiftRoutingMode = ShiftRoutingMode.INBOX_FIRST;
 
     /**
-     * Max open shifts (pending or confirmed, not completed) per caregiver at once.
-     * Zero means no limit.
+     * Max open shifts (pending or confirmed, end time still in the future) per caregiver
+     * at once for this agency. Past unfinished shifts do not count. Zero means no limit.
      */
     @Column(nullable = false, columnDefinition = "integer default 3")
     @Builder.Default

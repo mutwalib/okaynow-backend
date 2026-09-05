@@ -14,5 +14,7 @@ public enum ShiftStatus {
     IN_PROGRESS,
     COMPLETED,
     CANCELLED,
-    NO_SHOW
+    NO_SHOW,
+    /** Scheduled window ended without being completed or cancelled. */
+    EXPIRED
 }

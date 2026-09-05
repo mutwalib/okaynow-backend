@@ -3,6 +3,7 @@ package com.okaynow.agencies.service;
 import com.okaynow.booking.domain.ShiftClaim;
 import com.okaynow.booking.domain.ShiftClaimStatus;
 import com.okaynow.booking.repository.ShiftClaimRepository;
+import com.okaynow.booking.service.PastShiftExpiryService;
 import com.okaynow.common.exception.ConflictException;
 import com.okaynow.common.geo.GeoUtils;
 import com.okaynow.evv.support.ShiftWindows;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.EnumSet;
 import java.util.Set;
 import java.util.UUID;
@@ -34,9 +36,11 @@ public class CaregiverStaffingConstraintService {
     private final ShiftClaimRepository shiftClaimRepository;
     private final AgencySettingsService agencySettingsService;
     private final DriveTimeService driveTimeService;
+    private final PastShiftExpiryService pastShiftExpiryService;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public void assertAgencyStaffingRules(UUID agencyId, UUID caregiverProfileId, Shift candidate) {
+        pastShiftExpiryService.expireDueShifts();
         AgencySettings settings = agencySettingsService.getOrCreateForAgency(agencyId);
         assertMaxIncompleteShifts(agencyId, caregiverProfileId, candidate.getId(), settings);
         assertTravelBetweenShifts(caregiverProfileId, candidate, settings);
@@ -48,8 +52,14 @@ public class CaregiverStaffingConstraintService {
         if (max <= 0) {
             return;
         }
-        long count = shiftClaimRepository.countIncompleteForAgency(
-                caregiverProfileId, agencyId, excludeShiftId, INCOMPLETE_STATUSES);
+        // Include yesterday so overnight shifts still in window are counted; exclude ended ones.
+        LocalDate fromDate = LocalDate.now(ShiftWindows.ZONE).minusDays(1);
+        Instant now = Instant.now();
+        long count = shiftClaimRepository.findIncompleteForAgency(
+                        caregiverProfileId, agencyId, excludeShiftId, INCOMPLETE_STATUSES, fromDate)
+                .stream()
+                .filter(c -> !ShiftWindows.endInstant(c.getShift()).isBefore(now))
+                .count();
         if (count >= max) {
             throw new ConflictException(
                     "This caregiver already has " + count + " open shift(s) for your agency "
@@ -68,6 +78,9 @@ public class CaregiverStaffingConstraintService {
         for (ShiftClaim existing : shiftClaimRepository.findActiveClaimsExcludingShift(
                 caregiverProfileId, candidate.getId(), INCOMPLETE_STATUSES)) {
             Shift other = existing.getShift();
+            if (ShiftWindows.endInstant(other).isBefore(Instant.now())) {
+                continue;
+            }
             if (ShiftWindows.overlaps(candidate, other)) {
                 continue;
             }

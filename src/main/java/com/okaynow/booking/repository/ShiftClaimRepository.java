@@ -119,7 +119,8 @@ public interface ShiftClaimRepository extends JpaRepository<ShiftClaim, UUID> {
                 com.okaynow.shifts.domain.ShiftStatus.COMPLETED,
                 com.okaynow.shifts.domain.ShiftStatus.IN_PROGRESS,
                 com.okaynow.shifts.domain.ShiftStatus.CANCELLED,
-                com.okaynow.shifts.domain.ShiftStatus.NO_SHOW
+                com.okaynow.shifts.domain.ShiftStatus.NO_SHOW,
+                com.okaynow.shifts.domain.ShiftStatus.EXPIRED
               )
             order by c.shift.date asc, c.shift.startTime asc
             """)
@@ -157,13 +158,56 @@ public interface ShiftClaimRepository extends JpaRepository<ShiftClaim, UUID> {
               and c.shift.status not in (
                 com.okaynow.shifts.domain.ShiftStatus.COMPLETED,
                 com.okaynow.shifts.domain.ShiftStatus.CANCELLED,
-                com.okaynow.shifts.domain.ShiftStatus.NO_SHOW
+                com.okaynow.shifts.domain.ShiftStatus.NO_SHOW,
+                com.okaynow.shifts.domain.ShiftStatus.EXPIRED
               )
               and c.shift.id <> :excludeShiftId
+              and c.shift.date >= :fromDate
             """)
     long countIncompleteForAgency(
             @Param("caregiverProfileId") UUID caregiverProfileId,
             @Param("agencyId") UUID agencyId,
             @Param("excludeShiftId") UUID excludeShiftId,
-            @Param("statuses") Collection<ShiftClaimStatus> statuses);
+            @Param("statuses") Collection<ShiftClaimStatus> statuses,
+            @Param("fromDate") LocalDate fromDate);
+
+    @EntityGraph(attributePaths = {"shift"})
+    @Query("""
+            select c from ShiftClaim c
+            where c.caregiverProfile.id = :caregiverProfileId
+              and c.status in :statuses
+              and c.shift.agencyId = :agencyId
+              and c.shift.status not in (
+                com.okaynow.shifts.domain.ShiftStatus.COMPLETED,
+                com.okaynow.shifts.domain.ShiftStatus.CANCELLED,
+                com.okaynow.shifts.domain.ShiftStatus.NO_SHOW,
+                com.okaynow.shifts.domain.ShiftStatus.EXPIRED
+              )
+              and c.shift.id <> :excludeShiftId
+              and c.shift.date >= :fromDate
+            """)
+    List<ShiftClaim> findIncompleteForAgency(
+            @Param("caregiverProfileId") UUID caregiverProfileId,
+            @Param("agencyId") UUID agencyId,
+            @Param("excludeShiftId") UUID excludeShiftId,
+            @Param("statuses") Collection<ShiftClaimStatus> statuses,
+            @Param("fromDate") LocalDate fromDate);
+
+    @EntityGraph(attributePaths = {"shift"})
+    @Query("""
+            select c from ShiftClaim c
+            where c.status in :statuses
+              and c.shift.date <= :asOfDate
+              and c.shift.date >= :fromDate
+              and c.shift.status not in (
+                com.okaynow.shifts.domain.ShiftStatus.COMPLETED,
+                com.okaynow.shifts.domain.ShiftStatus.CANCELLED,
+                com.okaynow.shifts.domain.ShiftStatus.NO_SHOW,
+                com.okaynow.shifts.domain.ShiftStatus.EXPIRED
+              )
+            """)
+    List<ShiftClaim> findOpenClaimsPossiblyPast(
+            @Param("statuses") Collection<ShiftClaimStatus> statuses,
+            @Param("fromDate") LocalDate fromDate,
+            @Param("asOfDate") LocalDate asOfDate);
 }

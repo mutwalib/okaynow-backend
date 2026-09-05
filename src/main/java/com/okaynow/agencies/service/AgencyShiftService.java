@@ -12,6 +12,7 @@ import com.okaynow.booking.dto.ShiftClaimResponse;
 import com.okaynow.booking.repository.ShiftClaimRepository;
 import com.okaynow.booking.service.BookingService;
 import com.okaynow.common.exception.ResourceNotFoundException;
+import com.okaynow.evv.support.ShiftWindows;
 import com.okaynow.roster.service.AgencyRosterService;
 import com.okaynow.shifts.domain.Shift;
 import com.okaynow.shifts.domain.ShiftStatus;
@@ -53,7 +54,8 @@ public class AgencyShiftService {
     @Transactional(readOnly = true)
     public List<AgencyShiftCardResponse> listForAgency(UUID agencyUserId) {
         UUID agencyId = agencyAccessService.requireAgencyForUser(agencyUserId).getId();
-        List<Shift> shifts = shiftRepository.findOpenOrAssignedByAgencyId(agencyId, LocalDate.now());
+        List<Shift> shifts = shiftRepository.findOpenOrAssignedByAgencyId(
+                agencyId, LocalDate.now(ShiftWindows.ZONE));
         List<UUID> ids = shifts.stream().map(Shift::getId).toList();
         Map<UUID, List<ShiftClaim>> claimsByShift = ids.isEmpty()
                 ? Map.of()

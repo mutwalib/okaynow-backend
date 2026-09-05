@@ -6,6 +6,7 @@ import com.okaynow.common.exception.ResourceNotFoundException;
 import com.okaynow.common.geo.GeoUtils;
 import com.okaynow.roster.domain.AgencyCaregiverStatus;
 import com.okaynow.roster.repository.AgencyCaregiverRepository;
+import com.okaynow.evv.support.ShiftWindows;
 import com.okaynow.shifts.domain.Shift;
 import com.okaynow.shifts.dto.ShiftResponse;
 import com.okaynow.shifts.dto.ShiftResponses;
@@ -19,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -53,8 +55,13 @@ public class CaregiverAgencyShiftService {
         if (agencyIds.isEmpty()) {
             return List.of();
         }
-        List<Shift> open = shiftRepository.findOpenRosterBroadcastForAgencies(agencyIds, LocalDate.now())
+        // MA "today", plus yesterday so overnight shifts (e.g. 22:00–09:00) stay visible
+        // until their window ends. Server UTC midnight must not hide same-evening opens.
+        LocalDate fromDate = LocalDate.now(ShiftWindows.ZONE).minusDays(1);
+        Instant now = Instant.now();
+        List<Shift> open = shiftRepository.findOpenRosterBroadcastForAgencies(agencyIds, fromDate)
                 .stream()
+                .filter(shift -> !ShiftWindows.endInstant(shift).isBefore(now))
                 .filter(shift -> isEligibleInArea(caregiver, shift))
                 .toList();
         Map<UUID, String> names = shiftAgencyLabelService.namesFor(

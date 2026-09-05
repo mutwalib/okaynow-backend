@@ -129,8 +129,8 @@ public class ShiftRequestService {
     }
 
     /**
-     * Facility schedule "need coverage": route the existing calendar shift to one or
-     * more connected agencies (or all of them). Does not open the public marketplace.
+     * Facility schedule "need coverage": route the existing calendar shift to
+     * exactly one connected agency. Does not open the public marketplace.
      */
     @Transactional
     public void openFromFacilityShift(
@@ -308,6 +308,18 @@ public class ShiftRequestService {
         row.setCreatedShiftId(savedShift.getId());
         shiftRequestAgencyRepository.save(row);
 
+        Instant now = Instant.now();
+        for (ShiftRequestAgency other : shiftRequestAgencyRepository.findByShiftRequestId(request.getId())) {
+            if (other.getId().equals(row.getId())) {
+                continue;
+            }
+            if (other.getStatus() == ShiftRequestAgencyStatus.PENDING) {
+                other.setStatus(ShiftRequestAgencyStatus.DECLINED);
+                other.setRespondedAt(now);
+                shiftRequestAgencyRepository.save(other);
+            }
+        }
+
         request.setStatus(ShiftRequestStatus.FULFILLED);
         shiftRequestRepository.save(request);
 
@@ -339,11 +351,15 @@ public class ShiftRequestService {
 
     private Set<UUID> uniqueAgencyIds(List<UUID> agencyIds) {
         if (agencyIds == null || agencyIds.isEmpty()) {
-            throw new BadRequestException("Select at least one connected agency");
+            throw new BadRequestException("Select exactly one connected agency");
         }
         var unique = new HashSet<>(agencyIds);
         if (unique.size() != agencyIds.size()) {
             throw new BadRequestException("Duplicate agencies in request");
+        }
+        if (unique.size() != 1) {
+            throw new BadRequestException(
+                    "Send each opening to exactly one agency. Connect with another agency for a separate request.");
         }
         return unique;
     }
@@ -360,14 +376,14 @@ public class ShiftRequestService {
                 .filter(id -> !already.contains(id))
                 .toList();
         if (toAdd.isEmpty() && requireAtLeastOneNew) {
-            throw new BadRequestException("Select at least one connected agency");
+            throw new BadRequestException("Select exactly one connected agency");
         }
         if (toAdd.isEmpty()) {
-            throw new BadRequestException("Already sent to the selected agencies");
+            throw new BadRequestException("Already sent to the selected agency");
         }
         for (UUID agencyId : toAdd) {
             if (!connectionService.hasActiveConnection(requesterUserId, agencyId)) {
-                throw new BadRequestException("You must be connected to every selected agency");
+                throw new BadRequestException("You must be connected to the selected agency");
             }
         }
         for (UUID agencyId : toAdd) {

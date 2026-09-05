@@ -119,6 +119,10 @@ public class AgencyRosterService {
         }
         CaregiverProfile profile = caregiverProfileRepository.findByUserId(caregiverUser.getId())
                 .orElseThrow(() -> new BadRequestException("Caregiver profile not found"));
+        if (!profile.isAgencyRosterEnabled()) {
+            throw new BadRequestException(
+                    "This caregiver is not accepting agency roster invites. Ask them to enable Agency rosters on their profile.");
+        }
 
         var existing = agencyCaregiverRepository.findByAgencyIdAndCaregiverProfileId(
                 agency.getId(), profile.getId());
@@ -148,6 +152,10 @@ public class AgencyRosterService {
     public AgencyRosterEntryResponse acceptInvite(UUID caregiverUserId, UUID rosterId) {
         CaregiverProfile profile = caregiverProfileRepository.findByUserId(caregiverUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("Caregiver profile not found"));
+        if (!profile.isAgencyRosterEnabled()) {
+            throw new BadRequestException(
+                    "Agency rosters are turned off on your profile. Enable them under How you get work first.");
+        }
         AgencyCaregiver row = agencyCaregiverRepository.findByIdAndCaregiverProfileId(rosterId, profile.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Roster invite not found"));
         if (row.getStatus() != AgencyCaregiverStatus.INVITED) {

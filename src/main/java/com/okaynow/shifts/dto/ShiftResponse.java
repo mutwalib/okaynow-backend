@@ -40,6 +40,10 @@ public record ShiftResponse(
         int escalationRadiusBonusMiles,
         UUID createdBy,
         Instant createdAt,
-        boolean agencyCoverageRequested
+        boolean agencyCoverageRequested,
+        /** Tenant that owns / is staffing this shift; null for marketplace homes/facilities. */
+        UUID agencyId,
+        /** Present when {@code agencyId} is set — for caregiver open-board labeling. */
+        String agencyDisplayName
 ) {
 }

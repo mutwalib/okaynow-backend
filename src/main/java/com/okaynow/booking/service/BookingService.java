@@ -36,6 +36,7 @@ import com.okaynow.shifts.dto.ShiftResponse;
 import com.okaynow.shifts.dto.ShiftResponses;
 import com.okaynow.shifts.mapper.ShiftMapper;
 import com.okaynow.shifts.repository.ShiftRepository;
+import com.okaynow.shifts.service.ShiftAgencyLabelService;
 import com.okaynow.users.domain.CaregiverProfile;
 import com.okaynow.users.domain.ClientProfile;
 import com.okaynow.users.domain.FacilityProfile;
@@ -90,6 +91,7 @@ public class BookingService {
     private final DriveTimeService driveTimeService;
     private final CaregiverStaffingConstraintService staffingConstraintService;
     private final AgencyCaregiverRepository agencyCaregiverRepository;
+    private final ShiftAgencyLabelService shiftAgencyLabelService;
 
     /**
      * Caregiver claims an OPEN shift. Pessimistic locks are taken on the caregiver profile
@@ -101,6 +103,11 @@ public class BookingService {
     public ShiftClaimResponse claim(UUID shiftId, String caregiverEmail) {
         CaregiverProfile caregiver = lockCaregiverByEmail(caregiverEmail);
         assertActiveForNewMarketplaceClaim(caregiver);
+        if (!caregiver.isIndependentShiftsEnabled()) {
+            throw new BadRequestException(
+                    "Independent marketplace shifts are turned off on your profile. "
+                            + "Enable them under How you get work, or join an agency roster instead.");
+        }
         Shift shift = lockShift(shiftId);
 
         if (shift.getAgencyId() != null) {
@@ -154,8 +161,12 @@ public class BookingService {
     @Transactional
     public ShiftClaimResponse claimAgencyRosterShift(UUID shiftId, String caregiverEmail) {
         CaregiverProfile caregiver = lockCaregiverByEmail(caregiverEmail);
+        if (!caregiver.isAgencyRosterEnabled()) {
+            throw new BadRequestException(
+                    "Agency roster shifts are turned off on your profile. "
+                            + "Enable Agency rosters under How you get work.");
+        }
         Shift shift = lockShift(shiftId);
-
         if (shift.getAgencyId() == null) {
             throw new ConflictException("This is not an agency roster shift");
         }
@@ -728,7 +739,7 @@ public class BookingService {
                 "Marked as no-show",
                 "The " + shift.getDate() + " shift was marked no-show: " + cancelReason);
 
-        return shiftMapper.toResponse(shift);
+        return shiftAgencyLabelService.label(shift, shiftMapper.toResponse(shift));
     }
 
     /**
@@ -1083,7 +1094,9 @@ public class BookingService {
                         + " has " + shift.getMarketplaceSlots()
                         + " open marketplace slot(s).");
 
-        return ShiftResponses.forViewer(shiftMapper.toResponse(shift), actor.getRole());
+        return ShiftResponses.forViewer(
+                shiftAgencyLabelService.label(shift, shiftMapper.toResponse(shift)),
+                actor.getRole());
     }
 
     /**
@@ -1131,7 +1144,9 @@ public class BookingService {
                 "Marketplace openings for " + shift.getDate()
                         + " were withdrawn before a caregiver claimed them.");
 
-        return ShiftResponses.forViewer(shiftMapper.toResponse(shift), actor.getRole());
+        return ShiftResponses.forViewer(
+                shiftAgencyLabelService.label(shift, shiftMapper.toResponse(shift)),
+                actor.getRole());
     }
 
     private void authorizeReplacementActor(Shift shift, User actor) {
@@ -1486,7 +1501,7 @@ public class BookingService {
         User user = caregiver.getUser();
         if (user == null || user.getStatus() != UserStatus.ACTIVE) {
             throw new BadRequestException(
-                    "Your account is pending agency review. You can manage upcoming shifts you already have, "
+                    "Your account is pending OkayNow review. You can manage upcoming shifts you already have, "
                             + "but cannot claim new open shifts until approved.");
         }
     }
@@ -1507,7 +1522,8 @@ public class BookingService {
 
     private ShiftClaimResponse toResponse(ShiftClaim claim, boolean redactForCaregiver) {
         CaregiverProfile caregiver = claim.getCaregiverProfile();
-        var shift = shiftMapper.toResponse(claim.getShift());
+        Shift entity = claim.getShift();
+        var shift = shiftAgencyLabelService.label(entity, shiftMapper.toResponse(entity));
         if (redactForCaregiver) {
             shift = ShiftResponses.forViewer(shift, Role.CAREGIVER);
         }

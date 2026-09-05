@@ -65,10 +65,23 @@ public class CaregiverProfileService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         CaregiverProfile profile = findByUserId(userId);
 
-        // Legal names are not self-service. Agency staff must correct them on request.
+        // Legal names are not self-service. OkayNow staff must correct them on request.
         LegalNameGuard.assertUnchanged(
                 profile.getFirstName(), profile.getLastName(),
                 request.firstName(), request.lastName());
+
+        boolean nextIndependent = request.independentShiftsEnabled() != null
+                ? request.independentShiftsEnabled()
+                : profile.isIndependentShiftsEnabled();
+        boolean nextAgencyRoster = request.agencyRosterEnabled() != null
+                ? request.agencyRosterEnabled()
+                : profile.isAgencyRosterEnabled();
+        if (!nextIndependent && !nextAgencyRoster) {
+            throw new BadRequestException(
+                    "Choose at least one way to get work: independent shifts, agency rosters, or both");
+        }
+        profile.setIndependentShiftsEnabled(nextIndependent);
+        profile.setAgencyRosterEnabled(nextAgencyRoster);
 
         Set<Qualification> nextQuals = request.qualifications() == null
                 ? null
@@ -200,7 +213,7 @@ public class CaregiverProfileService {
                     user,
                     NotificationType.ONBOARDING_INFO_REQUESTED,
                     "New qualification needs verification",
-                    "Upload proof for: " + labels + ". Your account is under agency review until approved.",
+                    "Upload proof for: " + labels + ". Your account is under OkayNow review until approved.",
                     null);
             auditLogService.record(user, AuditAction.CAREGIVER_QUALIFICATIONS_ADDED, "USER", user.getId(), null,
                     "added=" + labels);
@@ -261,7 +274,7 @@ public class CaregiverProfileService {
                 user,
                 NotificationType.ONBOARDING_INFO_REQUESTED,
                 "Profile update under review",
-                "You updated your application details. Your account is under agency review until approved again.",
+                "You updated your application details. Your account is under OkayNow review until approved again.",
                 null);
         auditLogService.record(
                 user,

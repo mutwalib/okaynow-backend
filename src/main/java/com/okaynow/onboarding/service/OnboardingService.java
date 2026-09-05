@@ -255,7 +255,7 @@ public class OnboardingService {
         User target = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         if (target.getRole() != Role.CAREGIVER && target.getRole() != Role.CLIENT) {
-            throw new BadRequestException("Only caregivers and clients go through agency review");
+            throw new BadRequestException("Only caregivers and clients go through OkayNow review");
         }
         if (!target.isEmailVerified()) {
             throw new BadRequestException("User has not verified their email yet");

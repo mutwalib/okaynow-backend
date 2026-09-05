@@ -4,12 +4,12 @@ import com.okaynow.common.exception.BadRequestException;
 
 /**
  * Legal / registered names are immutable after signup for self-service updates.
- * Corrections require agency staff to update the name on the user's behalf.
+ * Corrections are performed by OkayNow platform staff — not agency tenants.
  */
 public final class LegalNameGuard {
 
     private static final String MESSAGE =
-            "Names cannot be changed after registration. Contact the agency if a correction is required.";
+            "Names cannot be changed after registration. Contact OkayNow support if a correction is required.";
 
     private LegalNameGuard() {
     }

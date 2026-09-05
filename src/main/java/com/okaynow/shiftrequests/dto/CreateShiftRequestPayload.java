@@ -21,6 +21,7 @@ public record CreateShiftRequestPayload(
         @Size(max = 2) String state,
         String zip,
         @Size(max = 2000) String notes,
-        @NotEmpty List<UUID> agencyIds
+        /** Exactly one connected agency receives this care need. */
+        @NotEmpty @Size(min = 1, max = 1) List<UUID> agencyIds
 ) {
 }

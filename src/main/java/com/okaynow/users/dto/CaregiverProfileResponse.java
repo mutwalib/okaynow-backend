@@ -27,6 +27,8 @@ public record CaregiverProfileResponse(
         String cvUrl,
         Instant cvUploadedAt,
         BigDecimal ratingAvg,
-        Integer ratingCount
+        Integer ratingCount,
+        boolean independentShiftsEnabled,
+        boolean agencyRosterEnabled
 ) {
 }

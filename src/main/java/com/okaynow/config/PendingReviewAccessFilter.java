@@ -64,7 +64,7 @@ public class PendingReviewAccessFilter extends OncePerRequestFilter {
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         objectMapper.writeValue(response.getOutputStream(), Map.of(
                 "message",
-                "Your account is pending agency review. You can still manage upcoming shifts "
+                "Your account is pending OkayNow review. You can still manage upcoming shifts "
                         + "you already have; new open-shift claims resume after approval."));
     }
 
@@ -85,7 +85,7 @@ public class PendingReviewAccessFilter extends OncePerRequestFilter {
                 && ("GET".equalsIgnoreCase(method) || "DELETE".equalsIgnoreCase(method))) {
             return true;
         }
-        // Allow finishing application details while waiting for agency review.
+        // Allow finishing application details while waiting for OkayNow review.
         if ("/api/caregivers/me".equals(path)
                 && ("GET".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method))) {
             return true;

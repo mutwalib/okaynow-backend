@@ -89,6 +89,7 @@ public class ShiftService {
     private final MarketplaceEligibilityService marketplaceEligibilityService;
     private final AgencyAccessService agencyAccessService;
     private final HomeAgencyConnectionService homeAgencyConnectionService;
+    private final ShiftAgencyLabelService shiftAgencyLabelService;
 
     @Transactional
     public CreateShiftResponse create(CreateShiftRequest request, User actor) {
@@ -564,7 +565,8 @@ public class ShiftService {
     public ShiftResponse getById(UUID id, User actor) {
         Shift shift = findById(id);
         authorizeView(shift, actor);
-        return ShiftResponses.forViewer(shiftMapper.toResponse(shift), actor.getRole());
+        ShiftResponse labeled = shiftAgencyLabelService.label(shift, shiftMapper.toResponse(shift));
+        return ShiftResponses.forViewer(labeled, actor.getRole());
     }
 
     /**

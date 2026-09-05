@@ -94,4 +94,20 @@ public class CaregiverProfile {
 
     @Builder.Default
     private Integer ratingCount = 0;
+
+    /**
+     * Caregiver can claim open shifts posted by homes/facilities on the independent
+     * marketplace (not agency-owned roster shifts).
+     */
+    @Column(nullable = false, columnDefinition = "boolean default true")
+    @Builder.Default
+    private boolean independentShiftsEnabled = true;
+
+    /**
+     * Caregiver can join agency rosters, receive roster invites, and pick up
+     * agency-posted roster shifts.
+     */
+    @Column(nullable = false, columnDefinition = "boolean default true")
+    @Builder.Default
+    private boolean agencyRosterEnabled = true;
 }

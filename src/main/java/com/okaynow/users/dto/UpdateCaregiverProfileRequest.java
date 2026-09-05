@@ -24,6 +24,10 @@ public record UpdateCaregiverProfileRequest(
         String homeZip,
         /** Optional; preferred path is address fields which the server geocodes. */
         Double homeLat,
-        Double homeLng
+        Double homeLng,
+        /** Claim open shifts from homes/facilities on the independent marketplace. */
+        Boolean independentShiftsEnabled,
+        /** Join agency rosters and receive agency-posted shifts. */
+        Boolean agencyRosterEnabled
 ) {
 }

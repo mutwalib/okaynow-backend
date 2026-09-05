@@ -12,14 +12,14 @@ import java.util.UUID;
  * {@code slots} is how many caregivers should be able to claim — typically part or all
  * of the remaining unfilled headcount.
  * <p>
- * Facilities must pass {@code agencyIds} (one, several, or all connected agencies)
- * instead of posting to the public marketplace.
+ * Facilities must pass exactly one connected {@code agencyId} (via {@code agencyIds}
+ * with a single entry) instead of posting to the public marketplace.
  */
 public record RequestReplacementRequest(
         @Size(max = 500) String reason,
         /** Marketplace openings to post (1 … remaining, or 1 … filled when replacing). */
         @Min(1) @Max(50) Integer slots,
-        /** Facility only: connected agencies that should receive this opening. */
-        List<UUID> agencyIds
+        /** Facility only: exactly one connected agency that should receive this opening. */
+        @Size(min = 1, max = 1) List<UUID> agencyIds
 ) {
 }

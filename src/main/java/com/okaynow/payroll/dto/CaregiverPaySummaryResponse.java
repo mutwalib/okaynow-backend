@@ -2,6 +2,7 @@ package com.okaynow.payroll.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 public record CaregiverPaySummaryResponse(
         LocalDate periodStart,
@@ -10,6 +11,7 @@ public record CaregiverPaySummaryResponse(
         BigDecimal totalHours,
         BigDecimal totalEarned,
         BigDecimal paid,
-        BigDecimal pending
+        BigDecimal pending,
+        List<CaregiverAgencyPaySlice> byAgency
 ) {
 }

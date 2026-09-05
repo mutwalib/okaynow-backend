@@ -25,6 +25,8 @@ public record CaregiverPayEntryResponse(
         PaymentStatus paymentStatus,
         LocalDate payPeriodStart,
         LocalDate payPeriodEnd,
-        Instant paidAt
+        Instant paidAt,
+        UUID agencyId,
+        String agencyDisplayName
 ) {
 }

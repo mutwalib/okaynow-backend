@@ -8,6 +8,7 @@ import com.okaynow.booking.repository.ShiftClaimRepository;
 import com.okaynow.common.exception.BadRequestException;
 import com.okaynow.common.exception.ConflictException;
 import com.okaynow.common.exception.ResourceNotFoundException;
+import com.okaynow.common.geo.GeoUtils;
 import com.okaynow.evv.domain.ClockMethod;
 import com.okaynow.evv.domain.Visit;
 import com.okaynow.evv.dto.ClientAttendanceRequest;
@@ -22,6 +23,7 @@ import com.okaynow.notifications.service.ShiftEventPublisher;
 import com.okaynow.shifts.domain.Shift;
 import com.okaynow.shifts.domain.ShiftStatus;
 import com.okaynow.shifts.repository.ShiftRepository;
+import com.okaynow.shifts.service.ShiftLocationService;
 import com.okaynow.users.domain.CaregiverProfile;
 import com.okaynow.users.domain.ClientProfile;
 import com.okaynow.users.domain.FacilityProfile;
@@ -62,6 +64,7 @@ public class VisitService {
     private final AuditLogService auditLogService;
     private final ShiftEventPublisher shiftEventPublisher;
     private final QualificationRulePackService qualificationRulePackService;
+    private final ShiftLocationService shiftLocationService;
 
     @Transactional
     public VisitResponse clockIn(UUID shiftId, String caregiverEmail, ClockInRequest request) {
@@ -89,12 +92,16 @@ public class VisitService {
         }
 
         assertCaregiverClockInWindow(shift, caregiver.getId());
+        shiftLocationService.ensureCoordinates(shift);
 
         boolean hasGps = request != null && request.lat() != null && request.lng() != null;
         var pack = qualificationRulePackService.getOrCreate(shift.getRequiredQualification());
         if (pack.isEvvRequired() && !hasGps) {
             throw new BadRequestException(
                     "GPS clock-in is required for " + pack.getQualification() + " visits (EVV)");
+        }
+        if (hasGps) {
+            assertWithinVisitGeofence(shift, request.lat(), request.lng(), "clock in");
         }
         Visit visit = Visit.builder()
                 .shiftId(shiftId)
@@ -141,6 +148,17 @@ public class VisitService {
                 .orElseThrow(() -> new ResourceNotFoundException("Shift not found"));
         if (shift.getStatus() != ShiftStatus.IN_PROGRESS) {
             throw new ConflictException("Shift is not in progress");
+        }
+
+        shiftLocationService.ensureCoordinates(shift);
+        if (request != null && request.lat() != null && request.lng() != null) {
+            assertWithinVisitGeofence(shift, request.lat(), request.lng(), "clock out");
+        } else {
+            var pack = qualificationRulePackService.getOrCreate(shift.getRequiredQualification());
+            if (pack.isEvvRequired()) {
+                throw new BadRequestException(
+                        "GPS clock-out is required for " + pack.getQualification() + " visits (EVV)");
+            }
         }
 
         visit.setClockOutAt(Instant.now());
@@ -307,6 +325,21 @@ public class VisitService {
         throw new BadRequestException(
                 "Clock-in is no longer available after the shift period ends. "
                         + "Ask the client to help update your clock-in and clock-out times.");
+    }
+
+    private void assertWithinVisitGeofence(Shift shift, double lat, double lng, String action) {
+        if (shift.getLat() == null || shift.getLng() == null) {
+            throw new BadRequestException(
+                    "This visit has no mapped location yet. Ask the agency to fix the service address.");
+        }
+        double meters = GeoUtils.distanceMeters(lat, lng, shift.getLat(), shift.getLng());
+        if (!GeoUtils.withinRadiusMeters(lat, lng, shift.getLat(), shift.getLng(), GeoUtils.EVV_GEOFENCE_METERS)) {
+            int feet = (int) Math.round(meters / 0.3048);
+            throw new BadRequestException(
+                    "You must be within " + GeoUtils.EVV_GEOFENCE_FEET
+                            + " ft of the visit address to " + action
+                            + " (about " + feet + " ft away right now).");
+        }
     }
 
     /**

@@ -13,6 +13,7 @@ import com.okaynow.common.dto.PagedResponse;
 import com.okaynow.common.exception.BadRequestException;
 import com.okaynow.common.exception.ConflictException;
 import com.okaynow.common.exception.ResourceNotFoundException;
+import com.okaynow.common.geo.GeocodingService;
 import com.okaynow.common.geo.ServiceRegionService;
 import com.okaynow.connections.service.HomeAgencyConnectionService;
 import com.okaynow.evv.support.ShiftWindows;
@@ -90,6 +91,8 @@ public class ShiftService {
     private final AgencyAccessService agencyAccessService;
     private final HomeAgencyConnectionService homeAgencyConnectionService;
     private final ShiftAgencyLabelService shiftAgencyLabelService;
+    private final GeocodingService geocodingService;
+    private final ShiftLocationService shiftLocationService;
 
     @Transactional
     public CreateShiftResponse create(CreateShiftRequest request, User actor) {
@@ -270,6 +273,22 @@ public class ShiftService {
         var region = serviceRegionService.validate(state, zip);
         state = region.state();
         zip = region.zip();
+
+        if (lat == null || lng == null) {
+            var point = geocodingService.requireGeocode(addressLine, city, state, zip);
+            lat = point.lat();
+            lng = point.lng();
+            if (client != null && (client.getLat() == null || client.getLng() == null)) {
+                client.setLat(lat);
+                client.setLng(lng);
+                clientProfileRepository.save(client);
+            }
+            if (facility != null && (facility.getLat() == null || facility.getLng() == null)) {
+                facility.setLat(lat);
+                facility.setLng(lng);
+                facilityProfileRepository.save(facility);
+            }
+        }
 
         ShiftScheduleType scheduleType = request.scheduleType() == null
                 ? ShiftScheduleType.ONE_OFF
@@ -565,6 +584,13 @@ public class ShiftService {
     public ShiftResponse getById(UUID id, User actor) {
         Shift shift = findById(id);
         authorizeView(shift, actor);
+        if (shift.getLat() == null || shift.getLng() == null) {
+            try {
+                shiftLocationService.ensureCoordinates(shift);
+            } catch (RuntimeException ignored) {
+                // Clock-in / create paths enforce a hard geocode failure.
+            }
+        }
         ShiftResponse labeled = shiftAgencyLabelService.label(shift, shiftMapper.toResponse(shift));
         return ShiftResponses.forViewer(labeled, actor.getRole());
     }

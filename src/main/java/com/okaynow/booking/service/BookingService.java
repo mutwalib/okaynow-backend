@@ -37,6 +37,7 @@ import com.okaynow.shifts.dto.ShiftResponses;
 import com.okaynow.shifts.mapper.ShiftMapper;
 import com.okaynow.shifts.repository.ShiftRepository;
 import com.okaynow.shifts.service.ShiftAgencyLabelService;
+import com.okaynow.shifts.service.ShiftLocationService;
 import com.okaynow.users.domain.CaregiverProfile;
 import com.okaynow.users.domain.ClientProfile;
 import com.okaynow.users.domain.FacilityProfile;
@@ -92,6 +93,7 @@ public class BookingService {
     private final CaregiverStaffingConstraintService staffingConstraintService;
     private final AgencyCaregiverRepository agencyCaregiverRepository;
     private final ShiftAgencyLabelService shiftAgencyLabelService;
+    private final ShiftLocationService shiftLocationService;
 
     /**
      * Caregiver claims an OPEN shift. Pessimistic locks are taken on the caregiver profile
@@ -1523,6 +1525,13 @@ public class BookingService {
     private ShiftClaimResponse toResponse(ShiftClaim claim, boolean redactForCaregiver) {
         CaregiverProfile caregiver = claim.getCaregiverProfile();
         Shift entity = claim.getShift();
+        if (entity.getLat() == null || entity.getLng() == null) {
+            try {
+                shiftLocationService.ensureCoordinates(entity);
+            } catch (RuntimeException ignored) {
+                // Leave pin empty; clock-in will surface a clear geocode error.
+            }
+        }
         var shift = shiftAgencyLabelService.label(entity, shiftMapper.toResponse(entity));
         if (redactForCaregiver) {
             shift = ShiftResponses.forViewer(shift, Role.CAREGIVER);

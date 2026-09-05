@@ -292,12 +292,10 @@ public class ShiftRequestService {
                     .notes(request.getNotes())
                     .createdBy(agencyUserId)
                     .build();
-            geocodingService.geocode(
-                            shift.getAddressLine(), shift.getCity(), shift.getState(), shift.getZip())
-                    .ifPresent(point -> {
-                        shift.setLat(point.lat());
-                        shift.setLng(point.lng());
-                    });
+            var point = geocodingService.requireGeocode(
+                    shift.getAddressLine(), shift.getCity(), shift.getState(), shift.getZip());
+            shift.setLat(point.lat());
+            shift.setLng(point.lng());
             savedShift = shiftRepository.save(shift);
         }
 

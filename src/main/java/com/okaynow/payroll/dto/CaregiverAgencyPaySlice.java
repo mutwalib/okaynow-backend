@@ -12,6 +12,7 @@ public record CaregiverAgencyPaySlice(
         BigDecimal totalHours,
         BigDecimal totalEarned,
         BigDecimal paid,
+        BigDecimal processing,
         BigDecimal pending
 ) {
 }

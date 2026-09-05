@@ -65,13 +65,19 @@ public class CaregiverPayrollService {
         BigDecimal hours = zero;
         BigDecimal earned = zero;
         BigDecimal paid = zero;
+        BigDecimal processing = zero;
+        BigDecimal pending = zero;
         Map<String, Acc> byKey = new LinkedHashMap<>();
         for (ShiftSettlement s : rows) {
             hours = hours.add(s.getHours());
             earned = earned.add(s.getCaregiverAmount());
-            boolean isPaid = s.getCaregiverPaymentStatus() == PaymentStatus.PAID;
-            if (isPaid) {
+            PaymentStatus status = s.getCaregiverPaymentStatus();
+            if (status == PaymentStatus.PAID) {
                 paid = paid.add(s.getCaregiverAmount());
+            } else if (status == PaymentStatus.PROCESSING) {
+                processing = processing.add(s.getCaregiverAmount());
+            } else {
+                pending = pending.add(s.getCaregiverAmount());
             }
             Shift shift = shiftsById.get(s.getShiftId());
             UUID agencyId = shift != null ? shift.getAgencyId() : null;
@@ -83,8 +89,12 @@ public class CaregiverPayrollService {
             acc.shiftCount++;
             acc.hours = acc.hours.add(s.getHours());
             acc.earned = acc.earned.add(s.getCaregiverAmount());
-            if (isPaid) {
+            if (status == PaymentStatus.PAID) {
                 acc.paid = acc.paid.add(s.getCaregiverAmount());
+            } else if (status == PaymentStatus.PROCESSING) {
+                acc.processing = acc.processing.add(s.getCaregiverAmount());
+            } else {
+                acc.pending = acc.pending.add(s.getCaregiverAmount());
             }
         }
 
@@ -99,7 +109,8 @@ public class CaregiverPayrollService {
                         a.hours,
                         a.earned,
                         a.paid,
-                        a.earned.subtract(a.paid)))
+                        a.processing,
+                        a.pending))
                 .toList();
 
         return new CaregiverPaySummaryResponse(
@@ -109,7 +120,8 @@ public class CaregiverPayrollService {
                 hours,
                 earned,
                 paid,
-                earned.subtract(paid),
+                processing,
+                pending,
                 byAgency);
     }
 
@@ -211,6 +223,8 @@ public class CaregiverPayrollService {
         BigDecimal hours = BigDecimal.ZERO.setScale(2);
         BigDecimal earned = BigDecimal.ZERO.setScale(2);
         BigDecimal paid = BigDecimal.ZERO.setScale(2);
+        BigDecimal processing = BigDecimal.ZERO.setScale(2);
+        BigDecimal pending = BigDecimal.ZERO.setScale(2);
 
         Acc(UUID agencyId, String label) {
             this.agencyId = agencyId;

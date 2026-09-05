@@ -11,6 +11,7 @@ public record CaregiverPaySummaryResponse(
         BigDecimal totalHours,
         BigDecimal totalEarned,
         BigDecimal paid,
+        BigDecimal processing,
         BigDecimal pending,
         List<CaregiverAgencyPaySlice> byAgency
 ) {

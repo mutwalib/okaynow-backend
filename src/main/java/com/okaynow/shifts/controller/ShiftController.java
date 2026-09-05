@@ -84,7 +84,7 @@ public class ShiftController {
     }
 
     @GetMapping("/{id}/assigned-caregivers")
-    @PreAuthorize("hasAnyRole('CLIENT', 'FACILITY', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('CLIENT', 'FACILITY', 'ADMIN', 'AGENCY_ADMIN')")
     public ResponseEntity<List<AssignedCaregiverResponse>> assignedCaregivers(
             @PathVariable UUID id, Authentication authentication) {
         return ResponseEntity.ok(shiftService.assignedCaregivers(

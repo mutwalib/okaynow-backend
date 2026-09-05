@@ -603,8 +603,10 @@ public class ShiftService {
     public List<AssignedCaregiverResponse> assignedCaregivers(UUID shiftId, User actor) {
         if (actor.getRole() != Role.CLIENT
                 && actor.getRole() != Role.FACILITY
-                && actor.getRole() != Role.ADMIN) {
-            throw new AccessDeniedException("Only clients, facilities, and admins can view assigned caregivers");
+                && actor.getRole() != Role.ADMIN
+                && actor.getRole() != Role.AGENCY_ADMIN) {
+            throw new AccessDeniedException(
+                    "Only clients, facilities, agencies, and admins can view assigned caregivers");
         }
         Shift shift = findById(shiftId);
         authorizeView(shift, actor);
@@ -1071,12 +1073,28 @@ public class ShiftService {
             return;
         }
         if (actor.getRole() == Role.AGENCY_ADMIN) {
-            if (shift.getClientProfileId() == null) {
-                throw new AccessDeniedException("You do not have permission to view this shift");
-            }
             UUID agencyId = agencyAccessService.requireAgencyForUser(actor.getId()).getId();
+            assertAgencyCanViewShift(agencyId, shift);
+            return;
+        }
+        throw new AccessDeniedException("You do not have permission to view this shift");
+    }
+
+    /**
+     * Agencies may view shifts they created, or any shift on a connected home/facility schedule.
+     */
+    private void assertAgencyCanViewShift(UUID agencyId, Shift shift) {
+        if (agencyId.equals(shift.getAgencyId())) {
+            return;
+        }
+        if (shift.getClientProfileId() != null) {
             homeAgencyConnectionService.assertActiveConnectionForClientProfile(
                     agencyId, shift.getClientProfileId());
+            return;
+        }
+        if (shift.getFacilityProfileId() != null) {
+            homeAgencyConnectionService.assertActiveConnectionForFacilityProfile(
+                    agencyId, shift.getFacilityProfileId());
             return;
         }
         throw new AccessDeniedException("You do not have permission to view this shift");
@@ -1097,11 +1115,15 @@ public class ShiftService {
             if (shift.getAgencyId() == null || !shift.getAgencyId().equals(agencyId)) {
                 throw new AccessDeniedException("Agencies can only edit schedules they created");
             }
-            if (shift.getClientProfileId() == null) {
+            if (shift.getClientProfileId() != null) {
+                homeAgencyConnectionService.assertActiveConnectionForClientProfile(
+                        agencyId, shift.getClientProfileId());
+            } else if (shift.getFacilityProfileId() != null) {
+                homeAgencyConnectionService.assertActiveConnectionForFacilityProfile(
+                        agencyId, shift.getFacilityProfileId());
+            } else {
                 throw new AccessDeniedException("You cannot manage this shift");
             }
-            homeAgencyConnectionService.assertActiveConnectionForClientProfile(
-                    agencyId, shift.getClientProfileId());
             return null;
         }
         if (actor.getRole() != Role.CLIENT) {

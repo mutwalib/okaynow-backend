@@ -108,7 +108,8 @@ public class AgencySettings {
 
     /** How accepted home/facility requests are routed to caregivers. */
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 24)
+    @Column(nullable = false, length = 24,
+            columnDefinition = "varchar(24) default 'INBOX_FIRST'")
     @Builder.Default
     private ShiftRoutingMode shiftRoutingMode = ShiftRoutingMode.INBOX_FIRST;
 

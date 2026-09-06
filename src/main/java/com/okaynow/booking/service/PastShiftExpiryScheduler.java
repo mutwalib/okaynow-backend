@@ -13,7 +13,9 @@ public class PastShiftExpiryScheduler {
     private final PastShiftExpiryService pastShiftExpiryService;
 
     /** Mark past unfinished assignments expired so they leave the open-shift cap. */
-    @Scheduled(fixedDelayString = "${okaynow.shifts.expiry-interval-ms:300000}")
+    @Scheduled(
+            fixedDelayString = "${okaynow.shifts.expiry-interval-ms:300000}",
+            initialDelayString = "${okaynow.shifts.expiry-initial-delay-ms:15000}")
     public void expirePastShifts() {
         try {
             pastShiftExpiryService.expireDueShifts();

@@ -21,7 +21,20 @@ public class AgencySettingsStaffingSchemaFix implements ApplicationRunner {
         try {
             jdbcTemplate.execute("""
                     ALTER TABLE agency_settings
-                    ADD COLUMN IF NOT EXISTS shift_routing_mode varchar(24) NOT NULL DEFAULT 'INBOX_FIRST'
+                    ADD COLUMN IF NOT EXISTS shift_routing_mode varchar(24) DEFAULT 'INBOX_FIRST'
+                    """);
+            jdbcTemplate.execute("""
+                    UPDATE agency_settings
+                    SET shift_routing_mode = 'INBOX_FIRST'
+                    WHERE shift_routing_mode IS NULL
+                    """);
+            jdbcTemplate.execute("""
+                    ALTER TABLE agency_settings
+                    ALTER COLUMN shift_routing_mode SET DEFAULT 'INBOX_FIRST'
+                    """);
+            jdbcTemplate.execute("""
+                    ALTER TABLE agency_settings
+                    ALTER COLUMN shift_routing_mode SET NOT NULL
                     """);
             jdbcTemplate.execute("""
                     ALTER TABLE agency_settings

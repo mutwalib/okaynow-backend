@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -17,8 +19,10 @@ import java.util.stream.Collectors;
 /**
  * Hibernate {@code ddl-auto=update} does not widen Postgres enum CHECK constraints
  * when new enum values are added. Rebuild known constraints on startup.
+ * Runs first so later seeders / schedulers can use new values (e.g. EXPIRED, MAP).
  */
 @Component
+@Order(Ordered.HIGHEST_PRECEDENCE)
 @RequiredArgsConstructor
 @Slf4j
 public class PostgresEnumCheckConstraintConfig implements ApplicationRunner {
@@ -61,6 +65,9 @@ public class PostgresEnumCheckConstraintConfig implements ApplicationRunner {
         sync("shifts", "required_qualification",
                 "shifts_required_qualification_check",
                 com.okaynow.users.domain.Qualification.class);
+        sync("qualification_rule_packs", "qualification",
+                "qualification_rule_packs_qualification_check",
+                com.okaynow.users.domain.Qualification.class);
         sync("agency_caregivers", "status", "agency_caregivers_status_check",
                 com.okaynow.roster.domain.AgencyCaregiverStatus.class);
     }
@@ -81,7 +88,7 @@ public class PostgresEnumCheckConstraintConfig implements ApplicationRunner {
             log.info("Synced {} with {} {} values",
                     constraint, enumType.getEnumConstants().length, enumType.getSimpleName());
         } catch (Exception ex) {
-            log.debug("Skipped {} sync: {}", constraint, ex.getMessage());
+            log.warn("Skipped {} sync: {}", constraint, ex.getMessage());
         }
     }
 }

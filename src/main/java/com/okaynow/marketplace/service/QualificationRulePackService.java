@@ -11,8 +11,11 @@ import com.okaynow.users.domain.Qualification;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
@@ -24,20 +27,21 @@ import java.util.Set;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@Order(20)
 public class QualificationRulePackService implements ApplicationRunner {
 
     private final QualificationRulePackRepository repository;
+    private final PlatformTransactionManager transactionManager;
 
     @Override
-    @Transactional
     public void run(ApplicationArguments args) {
+        // Each seed in its own transaction so a CHECK-constraint failure on MAP/OTHER
+        // cannot mark the outer startup transaction rollback-only and kill boot.
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
         for (Qualification q : Qualification.values()) {
             try {
-                getOrCreate(q);
+                tx.executeWithoutResult(status -> getOrCreate(q));
             } catch (Exception ex) {
-                // If the DB schema/check constraints haven't been updated to include
-                // newer Qualification enum values (e.g. MAP/OTHER), we don't want
-                // to crash the whole application on startup.
                 log.warn("Skipping qualification_rule_packs seed for {}: {}", q, ex.getMessage());
             }
         }

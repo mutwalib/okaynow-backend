@@ -100,7 +100,7 @@ public class NotificationFanoutListener {
                         .append(shift.getRequiredQualification())
                         .append("\"");
             }
-            if (shift.getPayRate() != null) {
+            if (shift.getPayRate() != null && shift.getAgencyId() == null) {
                 sb.append(",\"payRate\":").append(shift.getPayRate());
             }
             sb.append(",\"marketplaceSlots\":").append(shift.getMarketplaceSlots());

@@ -3,8 +3,9 @@ package com.okaynow.shifts.dto;
 import com.okaynow.users.domain.Role;
 
 /**
- * Role-scoped shift payloads: caregivers see pay only; clients/facilities see bill only;
- * admins see both.
+ * Role-scoped shift payloads: caregivers see marketplace pay only; clients/facilities
+ * see bill only; agency shift pay is never shown to caregivers (roster offer / settlements
+ * are separate). Admins see both.
  */
 public final class ShiftResponses {
 
@@ -16,9 +17,11 @@ public final class ShiftResponses {
             return raw;
         }
         if (role == Role.CAREGIVER) {
+            // Agency shifts: pay is between home and agency — never expose to caregivers.
+            java.math.BigDecimal pay = raw.agencyId() != null ? null : raw.payRate();
             return copy(
                     raw,
-                    raw.payRate(),
+                    pay,
                     null,
                     false);
         }

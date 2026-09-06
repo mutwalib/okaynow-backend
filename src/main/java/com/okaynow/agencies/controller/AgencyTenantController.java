@@ -18,17 +18,21 @@ import com.okaynow.agencies.service.StripeBillingService;
 import com.okaynow.agencies.service.StripeConnectService;
 import com.okaynow.agencies.support.AgencyAccessService;
 import com.okaynow.booking.dto.ShiftClaimResponse;
+import com.okaynow.common.dto.PagedResponse;
 import com.okaynow.connections.dto.HomeAgencyConnectionResponse;
 import com.okaynow.connections.service.HomeAgencyConnectionService;
 import com.okaynow.hiring.dto.AcceptCaregiverInterestRequest;
 import com.okaynow.hiring.dto.CaregiverAgencyInterestResponse;
 import com.okaynow.hiring.service.CaregiverAgencyInterestService;
+import com.okaynow.payroll.domain.PaymentStatus;
 import com.okaynow.payroll.dto.ClientInvoiceResponse;
 import com.okaynow.payroll.dto.AgencySettingsResponse;
+import com.okaynow.payroll.dto.FinanceSummaryResponse;
 import com.okaynow.payroll.dto.SettlementResponse;
 import com.okaynow.payroll.dto.UpdateAgencySettingsRequest;
 import com.okaynow.payroll.dto.UpdatePaymentStatusRequest;
 import com.okaynow.payroll.service.AgencySettingsService;
+import com.okaynow.payroll.service.FinanceService;
 import com.okaynow.payroll.service.InvoiceService;
 import com.okaynow.roster.dto.AgencyRosterEntryResponse;
 import com.okaynow.roster.dto.AgencyRosterHubResponse;
@@ -55,6 +59,9 @@ import com.okaynow.users.repository.FacilityProfileRepository;
 import com.okaynow.users.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -91,6 +98,7 @@ public class AgencyTenantController {
     private final AgencyAccessService agencyAccessService;
     private final AgencyHoursExportService agencyHoursExportService;
     private final InvoiceService invoiceService;
+    private final FinanceService financeService;
     private final CaregiverAgencyInterestService interestService;
     private final AgencyRosterService agencyRosterService;
     private final AgencyRosterHubService agencyRosterHubService;
@@ -180,6 +188,29 @@ public class AgencyTenantController {
                         "attachment; filename=\"agency-hours-" + from + "-to-" + to + ".csv\"")
                 .contentType(new MediaType("text", "csv"))
                 .body(csv);
+    }
+
+    @GetMapping("/finance/summary")
+    public ResponseEntity<FinanceSummaryResponse> financeSummary(
+            Authentication authentication,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate periodStart,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate periodEnd) {
+        UUID agencyId = agencyAccessService.requireAgencyForUser(currentUserId(authentication)).getId();
+        return ResponseEntity.ok(financeService.summaryForAgency(agencyId, periodStart, periodEnd));
+    }
+
+    @GetMapping("/finance/settlements")
+    public ResponseEntity<PagedResponse<SettlementResponse>> financeSettlements(
+            Authentication authentication,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate periodStart,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate periodEnd,
+            @RequestParam(required = false) PaymentStatus clientPaymentStatus,
+            @RequestParam(required = false) PaymentStatus caregiverPaymentStatus,
+            @RequestParam(required = false) String q,
+            @PageableDefault(size = 40, sort = "shiftDate", direction = Sort.Direction.DESC) Pageable pageable) {
+        UUID agencyId = agencyAccessService.requireAgencyForUser(currentUserId(authentication)).getId();
+        return ResponseEntity.ok(financeService.listSettlementsForAgency(
+                agencyId, periodStart, periodEnd, clientPaymentStatus, caregiverPaymentStatus, q, pageable));
     }
 
     @GetMapping("/invoices")

@@ -526,6 +526,14 @@ public class BookingService {
     }
 
     @Transactional(readOnly = true)
+    public PagedResponse<ShiftClaimResponse> claimsForAgency(
+            UUID agencyId, ShiftClaimStatus status, Pageable pageable) {
+        return PagedResponse.from(
+                shiftClaimRepository.findByAgencyIdAndOptionalStatus(agencyId, status, pageable)
+                        .map(this::toResponse));
+    }
+
+    @Transactional(readOnly = true)
     public java.util.List<ShiftClaimResponse> claimsForShift(UUID shiftId) {
         if (!shiftRepository.existsById(shiftId)) {
             throw new ResourceNotFoundException("Shift not found");

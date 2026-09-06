@@ -229,4 +229,16 @@ public interface ShiftClaimRepository extends JpaRepository<ShiftClaim, UUID> {
             @Param("statuses") Collection<ShiftClaimStatus> statuses,
             @Param("fromDate") LocalDate fromDate,
             @Param("asOfDate") LocalDate asOfDate);
+
+    @EntityGraph(attributePaths = {"shift", "caregiverProfile", "caregiverProfile.user"})
+    @Query("""
+            select c from ShiftClaim c
+            where c.shift.agencyId = :agencyId
+              and (:status is null or c.status = :status)
+            order by c.claimedAt desc
+            """)
+    Page<ShiftClaim> findByAgencyIdAndOptionalStatus(
+            @Param("agencyId") UUID agencyId,
+            @Param("status") ShiftClaimStatus status,
+            Pageable pageable);
 }

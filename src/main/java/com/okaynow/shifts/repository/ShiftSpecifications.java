@@ -82,6 +82,10 @@ public final class ShiftSpecifications {
         };
     }
 
+    public static Specification<Shift> forAgency(UUID agencyId) {
+        return (root, query, cb) -> cb.equal(root.get("agencyId"), agencyId);
+    }
+
     /**
      * Facility board scope: owned facility profile, plus legacy rows created by that
      * facility user before facilityProfileId existed (no family client attached).

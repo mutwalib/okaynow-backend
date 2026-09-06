@@ -273,11 +273,13 @@
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/payroll/service/SettlementService.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/payroll/support/PayPeriodCalculator.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/reports/controller/AdminReportController.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/reports/controller/AgencyReportController.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/reports/domain/ReportFormat.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/reports/domain/ReportType.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/reports/dto/GeneratedReport.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/reports/dto/ReportMeta.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/reports/service/AdminReportService.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/reports/service/AgencyReportService.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/reports/support/ReportWriters.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/reviews/controller/ReviewController.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/reviews/domain/CaregiverReview.java

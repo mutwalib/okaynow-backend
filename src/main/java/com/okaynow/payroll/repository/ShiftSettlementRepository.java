@@ -116,6 +116,53 @@ public interface ShiftSettlementRepository extends JpaRepository<ShiftSettlement
 
     @Query("""
             select s from ShiftSettlement s
+            where s.shiftDate >= :dateFrom
+              and s.shiftDate <= :dateTo
+              and exists (
+                select 1 from com.okaynow.shifts.domain.Shift sh
+                where sh.id = s.shiftId and sh.agencyId = :agencyId
+              )
+            """)
+    List<ShiftSettlement> findAllByAgencyAndShiftDateRange(
+            @Param("agencyId") UUID agencyId,
+            @Param("dateFrom") LocalDate dateFrom,
+            @Param("dateTo") LocalDate dateTo);
+
+    @Query("""
+            select s from ShiftSettlement s
+            left join com.okaynow.users.domain.CaregiverProfile cg on cg.id = s.caregiverProfileId
+            left join com.okaynow.users.domain.ClientProfile cl on cl.id = s.clientProfileId
+            left join com.okaynow.users.domain.FacilityProfile fp on fp.id = s.facilityProfileId
+            where s.shiftDate >= :dateFrom
+              and s.shiftDate <= :dateTo
+              and exists (
+                select 1 from com.okaynow.shifts.domain.Shift sh
+                where sh.id = s.shiftId and sh.agencyId = :agencyId
+              )
+              and (:clientStatus is null or s.clientPaymentStatus = :clientStatus)
+              and (:caregiverStatus is null or s.caregiverPaymentStatus = :caregiverStatus)
+              and (
+                :q is null or :q = ''
+                or lower(cg.firstName) like lower(concat('%', cast(:q as string), '%'))
+                or lower(cg.lastName) like lower(concat('%', cast(:q as string), '%'))
+                or lower(concat(cg.firstName, ' ', cg.lastName)) like lower(concat('%', cast(:q as string), '%'))
+                or lower(cl.firstName) like lower(concat('%', cast(:q as string), '%'))
+                or lower(cl.lastName) like lower(concat('%', cast(:q as string), '%'))
+                or lower(concat(cl.firstName, ' ', cl.lastName)) like lower(concat('%', cast(:q as string), '%'))
+                or lower(fp.facilityName) like lower(concat('%', cast(:q as string), '%'))
+              )
+            """)
+    Page<ShiftSettlement> searchByAgencyAndShiftDateRange(
+            @Param("agencyId") UUID agencyId,
+            @Param("dateFrom") LocalDate dateFrom,
+            @Param("dateTo") LocalDate dateTo,
+            @Param("clientStatus") PaymentStatus clientStatus,
+            @Param("caregiverStatus") PaymentStatus caregiverStatus,
+            @Param("q") String q,
+            Pageable pageable);
+
+    @Query("""
+            select s from ShiftSettlement s
             where s.caregiverProfileId = :caregiverProfileId
               and s.shiftDate >= :dateFrom
               and s.shiftDate <= :dateTo

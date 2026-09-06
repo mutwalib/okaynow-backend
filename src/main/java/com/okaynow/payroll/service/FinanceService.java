@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -27,8 +28,64 @@ public class FinanceService {
     public FinanceSummaryResponse summary(LocalDate periodStart, LocalDate periodEnd) {
         var bounds = resolvePeriod(periodStart, periodEnd);
         settlementService.backfillCompletedInPeriod(bounds.start(), bounds.end());
+        return summarize(settlementRepository.findAllByShiftDateRange(bounds.start(), bounds.end()), bounds);
+    }
 
-        List<ShiftSettlement> rows = settlementRepository.findAllByShiftDateRange(bounds.start(), bounds.end());
+    @Transactional
+    public FinanceSummaryResponse summaryForAgency(
+            UUID agencyId, LocalDate periodStart, LocalDate periodEnd) {
+        var bounds = resolvePeriod(periodStart, periodEnd);
+        settlementService.backfillCompletedInPeriod(bounds.start(), bounds.end());
+        return summarize(
+                settlementRepository.findAllByAgencyAndShiftDateRange(
+                        agencyId, bounds.start(), bounds.end()),
+                bounds);
+    }
+
+    @Transactional
+    public PagedResponse<SettlementResponse> listSettlements(
+            LocalDate periodStart,
+            LocalDate periodEnd,
+            PaymentStatus clientStatus,
+            PaymentStatus caregiverStatus,
+            String q,
+            Pageable pageable) {
+        var bounds = resolvePeriod(periodStart, periodEnd);
+        settlementService.backfillCompletedInPeriod(bounds.start(), bounds.end());
+
+        String query = normalizeQuery(q);
+        return PagedResponse.from(
+                settlementRepository.searchByShiftDateRange(
+                                bounds.start(), bounds.end(), clientStatus, caregiverStatus, query, pageable)
+                        .map(settlementService::toAdminResponse));
+    }
+
+    @Transactional
+    public PagedResponse<SettlementResponse> listSettlementsForAgency(
+            UUID agencyId,
+            LocalDate periodStart,
+            LocalDate periodEnd,
+            PaymentStatus clientStatus,
+            PaymentStatus caregiverStatus,
+            String q,
+            Pageable pageable) {
+        var bounds = resolvePeriod(periodStart, periodEnd);
+        settlementService.backfillCompletedInPeriod(bounds.start(), bounds.end());
+        String query = normalizeQuery(q);
+        return PagedResponse.from(
+                settlementRepository.searchByAgencyAndShiftDateRange(
+                                agencyId,
+                                bounds.start(),
+                                bounds.end(),
+                                clientStatus,
+                                caregiverStatus,
+                                query,
+                                pageable)
+                        .map(settlementService::toAdminResponse));
+    }
+
+    private static FinanceSummaryResponse summarize(
+            List<ShiftSettlement> rows, PayPeriodCalculator.Bounds bounds) {
         BigDecimal zero = BigDecimal.ZERO.setScale(2);
         BigDecimal totalHours = zero;
         BigDecimal clientBilled = zero;
@@ -67,26 +124,12 @@ public class FinanceService {
                 agencyCollected);
     }
 
-    @Transactional
-    public PagedResponse<SettlementResponse> listSettlements(
-            LocalDate periodStart,
-            LocalDate periodEnd,
-            PaymentStatus clientStatus,
-            PaymentStatus caregiverStatus,
-            String q,
-            Pageable pageable) {
-        var bounds = resolvePeriod(periodStart, periodEnd);
-        settlementService.backfillCompletedInPeriod(bounds.start(), bounds.end());
-
+    private static String normalizeQuery(String q) {
         String query = q == null ? null : q.trim();
         if (query != null && query.isEmpty()) {
-            query = null;
+            return null;
         }
-
-        return PagedResponse.from(
-                settlementRepository.searchByShiftDateRange(
-                                bounds.start(), bounds.end(), clientStatus, caregiverStatus, query, pageable)
-                        .map(settlementService::toAdminResponse));
+        return query;
     }
 
     private PayPeriodCalculator.Bounds resolvePeriod(LocalDate periodStart, LocalDate periodEnd) {

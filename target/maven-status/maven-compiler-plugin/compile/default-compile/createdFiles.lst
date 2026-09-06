@@ -3,3 +3,4 @@ com/okaynow/marketplace/service/QualificationRulePackService$1.class
 com/okaynow/auth/service/AuthChallengeService$1.class
 com/okaynow/shifts/repository/ShiftSpecifications$1.class
 com/okaynow/reports/service/AdminReportService$1.class
+com/okaynow/reports/service/AgencyReportService$1.class

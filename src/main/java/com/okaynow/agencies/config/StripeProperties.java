@@ -13,13 +13,13 @@ public class StripeProperties {
 
     private String secretKey = "";
     private String webhookSecret = "";
-    private String successUrl = "http://localhost:3000/agency/billing?checkout=success";
-    private String cancelUrl = "http://localhost:3000/agency/billing?checkout=cancel";
+    private String successUrl = "http://localhost:3000/agency/settings/billing?checkout=success";
+    private String cancelUrl = "http://localhost:3000/agency/settings/billing?checkout=cancel";
     private String priceStarter = "";
     private String priceProfessional = "";
     private String priceFeatured = "";
-    private String connectReturnUrl = "http://localhost:3000/agency/billing?connect=return";
-    private String connectRefreshUrl = "http://localhost:3000/agency/billing?connect=refresh";
+    private String connectReturnUrl = "http://localhost:3000/agency/settings/billing?connect=return";
+    private String connectRefreshUrl = "http://localhost:3000/agency/settings/billing?connect=refresh";
     private String invoiceSuccessUrl = "http://localhost:3000/client/billing?paid=success";
     private String invoiceCancelUrl = "http://localhost:3000/client/billing?paid=cancel";
 

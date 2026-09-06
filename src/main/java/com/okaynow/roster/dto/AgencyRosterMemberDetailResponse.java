@@ -1,6 +1,7 @@
 package com.okaynow.roster.dto;
 
 import com.okaynow.roster.domain.AgencyCaregiverStatus;
+import com.okaynow.roster.domain.RosterPayClassification;
 import com.okaynow.users.domain.Qualification;
 import com.okaynow.users.domain.UserStatus;
 
@@ -15,7 +16,7 @@ public record AgencyRosterMemberDetailResponse(
         AgencyCaregiverStatus rosterStatus,
         String inviteMessage,
         BigDecimal agreedPayRate,
-        String payOfferNote,
+        RosterPayClassification payClassification,
         Instant payOfferUpdatedAt,
         Instant invitedAt,
         Instant respondedAt,

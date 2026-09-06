@@ -1,6 +1,7 @@
 package com.okaynow.roster.dto;
 
 import com.okaynow.roster.domain.AgencyCaregiverStatus;
+import com.okaynow.roster.domain.RosterPayClassification;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -17,7 +18,7 @@ public record AgencyRosterEntryResponse(
         AgencyCaregiverStatus status,
         String inviteMessage,
         BigDecimal agreedPayRate,
-        String payOfferNote,
+        RosterPayClassification payClassification,
         Instant payOfferUpdatedAt,
         Instant invitedAt,
         Instant respondedAt

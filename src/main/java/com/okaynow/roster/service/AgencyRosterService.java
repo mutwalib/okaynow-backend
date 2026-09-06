@@ -9,6 +9,7 @@ import com.okaynow.notifications.domain.NotificationType;
 import com.okaynow.notifications.service.NotificationService;
 import com.okaynow.roster.domain.AgencyCaregiver;
 import com.okaynow.roster.domain.AgencyCaregiverStatus;
+import com.okaynow.roster.domain.RosterPayClassification;
 import com.okaynow.roster.dto.AgencyRosterEntryResponse;
 import com.okaynow.roster.dto.AgencyRosterMemberDetailResponse;
 import com.okaynow.roster.dto.CaregiverLookupResponse;
@@ -83,6 +84,10 @@ public class AgencyRosterService {
         Agency agency = agencyAccessService.requireAgencyForUser(agencyUserId);
         var roster = agencyCaregiverRepository.findByAgencyIdAndCaregiverProfileId(
                 agency.getId(), profile.getId());
+        AgencyCaregiverStatus rosterStatus = roster.map(AgencyCaregiver::getStatus).orElse(null);
+        boolean alreadyOnRoster = rosterStatus == AgencyCaregiverStatus.ACTIVE
+                || rosterStatus == AgencyCaregiverStatus.INVITED;
+        boolean canReinvite = rosterStatus == AgencyCaregiverStatus.REMOVED;
         return new CaregiverLookupResponse(
                 profile.getId(),
                 profile.getFirstName(),
@@ -92,8 +97,9 @@ public class AgencyRosterService {
                 profile.getHomeCity(),
                 profile.getHomeState(),
                 profile.getServiceRadiusMiles(),
-                roster.isPresent(),
-                roster.map(r -> r.getStatus().name()).orElse(null));
+                alreadyOnRoster,
+                canReinvite,
+                rosterStatus != null ? rosterStatus.name() : null);
     }
 
     @Transactional(readOnly = true)
@@ -146,7 +152,7 @@ public class AgencyRosterService {
             throw new BadRequestException("Caregiver email is required");
         }
         BigDecimal payRate = requirePayRate(request.payRate());
-        String payNote = trimOrNull(request.payOfferNote());
+        RosterPayClassification classification = requireClassification(request.payClassification());
         User caregiverUser = userRepository.findByEmail(request.email().trim().toLowerCase())
                 .orElseThrow(() -> new BadRequestException(
                         "No caregiver account exists for that email — they must register as a caregiver first"));
@@ -169,12 +175,18 @@ public class AgencyRosterService {
             if (status == AgencyCaregiverStatus.INVITED || status == AgencyCaregiverStatus.ACTIVE) {
                 throw new ConflictException("This caregiver is already on the roster or has a pending invite");
             }
+            if (status == AgencyCaregiverStatus.SUSPENDED) {
+                throw new BadRequestException(
+                        "This caregiver is suspended. Unsuspend them instead of sending a new invite.");
+            }
+            // REMOVED (or any other non-active state): send a fresh invite that requires accept.
             AgencyCaregiver row = existing.get();
             row.setStatus(AgencyCaregiverStatus.INVITED);
             row.setInviteMessage(trimOrNull(request.message()));
-            applyPayOffer(row, payRate, payNote, now);
+            applyPayOffer(row, payRate, classification, now);
             row.setRespondedAt(null);
             row.setRemovedAt(null);
+            row.setInvitedAt(now);
             saved = agencyCaregiverRepository.save(row);
         } else {
             AgencyCaregiver row = AgencyCaregiver.builder()
@@ -183,7 +195,7 @@ public class AgencyRosterService {
                     .status(AgencyCaregiverStatus.INVITED)
                     .inviteMessage(trimOrNull(request.message()))
                     .agreedPayRate(payRate)
-                    .payOfferNote(payNote)
+                    .payClassification(classification)
                     .payOfferUpdatedAt(now)
                     .build();
             saved = agencyCaregiverRepository.save(row);
@@ -192,7 +204,7 @@ public class AgencyRosterService {
                 caregiverUser,
                 NotificationType.ROSTER_INVITE,
                 "Roster invite from " + agency.getDisplayName(),
-                inviteBody(agency, payRate, payNote, trimOrNull(request.message())),
+                inviteBody(agency, payRate, classification, trimOrNull(request.message())),
                 saved);
         return toResponse(saved);
     }
@@ -207,15 +219,15 @@ public class AgencyRosterService {
             throw new BadRequestException("Cannot revise pay for a removed roster member — invite them again");
         }
         BigDecimal payRate = requirePayRate(request.payRate());
-        String payNote = trimOrNull(request.payOfferNote());
-        applyPayOffer(row, payRate, payNote, Instant.now());
+        RosterPayClassification classification = requireClassification(request.payClassification());
+        applyPayOffer(row, payRate, classification, Instant.now());
         AgencyCaregiver saved = agencyCaregiverRepository.save(row);
         User caregiverUser = saved.getCaregiverProfile().getUser();
         notifyCaregiver(
                 caregiverUser,
                 NotificationType.ROSTER_PAY_OFFER_UPDATED,
                 "Pay offer updated — " + agency.getDisplayName(),
-                offerRevisionBody(agency, payRate, payNote),
+                offerRevisionBody(agency, payRate, classification),
                 saved);
         return toResponse(saved);
     }
@@ -306,14 +318,31 @@ public class AgencyRosterService {
 
     /** Apply pay when accepting a caregiver interest / hiring application. */
     public void applyPayOfferOnAccept(
-            AgencyCaregiver row, BigDecimal payRate, String payOfferNote) {
-        applyPayOffer(row, requirePayRate(payRate), trimOrNull(payOfferNote), Instant.now());
+            AgencyCaregiver row, BigDecimal payRate, RosterPayClassification classification) {
+        applyPayOffer(row, requirePayRate(payRate), requireClassification(classification), Instant.now());
+    }
+
+    public static String offerSentence(BigDecimal payRate, RosterPayClassification classification) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("The offer is $")
+                .append(payRate.setScale(2, RoundingMode.HALF_UP).toPlainString())
+                .append(" per hour");
+        if (classification == RosterPayClassification.W2) {
+            sb.append(" as W-2 (agency runs payroll with taxes)");
+        } else if (classification == RosterPayClassification.NON_W2) {
+            sb.append(" (not W-2)");
+        }
+        sb.append(".");
+        return sb.toString();
     }
 
     private void applyPayOffer(
-            AgencyCaregiver row, BigDecimal payRate, String payNote, Instant at) {
+            AgencyCaregiver row,
+            BigDecimal payRate,
+            RosterPayClassification classification,
+            Instant at) {
         row.setAgreedPayRate(payRate);
-        row.setPayOfferNote(payNote);
+        row.setPayClassification(classification);
         row.setPayOfferUpdatedAt(at);
     }
 
@@ -330,35 +359,38 @@ public class AgencyRosterService {
         if (row.getAgreedPayRate() != null) {
             payload += ",\"agreedPayRate\":" + row.getAgreedPayRate().toPlainString();
         }
+        if (row.getPayClassification() != null) {
+            payload += ",\"payClassification\":\"" + row.getPayClassification().name() + "\"";
+        }
         payload += "}";
         notificationService.notifyUser(caregiverUser, type, title, body, payload);
     }
 
     private static String inviteBody(
-            Agency agency, BigDecimal payRate, String payNote, String message) {
+            Agency agency,
+            BigDecimal payRate,
+            RosterPayClassification classification,
+            String message) {
         StringBuilder sb = new StringBuilder();
         sb.append(agency.getDisplayName()).append(" invited you to their roster. ");
-        sb.append(offerSentence(payRate, payNote));
+        sb.append(offerSentence(payRate, classification));
         if (message != null) {
             sb.append(" Message: ").append(message);
         }
         return sb.toString();
     }
 
-    private static String offerRevisionBody(Agency agency, BigDecimal payRate, String payNote) {
-        return agency.getDisplayName() + " updated your pay offer. " + offerSentence(payRate, payNote);
+    private static String offerRevisionBody(
+            Agency agency, BigDecimal payRate, RosterPayClassification classification) {
+        return agency.getDisplayName() + " updated your pay offer. "
+                + offerSentence(payRate, classification);
     }
 
-    private static String offerSentence(BigDecimal payRate, String payNote) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("The offer is $")
-                .append(payRate.setScale(2, RoundingMode.HALF_UP).toPlainString())
-                .append(" per hour");
-        if (payNote != null) {
-            sb.append(" (").append(payNote).append(")");
+    private static RosterPayClassification requireClassification(RosterPayClassification value) {
+        if (value == null) {
+            throw new BadRequestException("Choose whether this offer is W-2 or not W-2");
         }
-        sb.append(".");
-        return sb.toString();
+        return value;
     }
 
     private static BigDecimal requirePayRate(BigDecimal payRate) {
@@ -381,7 +413,7 @@ public class AgencyRosterService {
                 row.getStatus(),
                 row.getInviteMessage(),
                 row.getAgreedPayRate(),
-                row.getPayOfferNote(),
+                row.getPayClassification(),
                 row.getPayOfferUpdatedAt(),
                 row.getInvitedAt(),
                 row.getRespondedAt());
@@ -395,7 +427,7 @@ public class AgencyRosterService {
                 row.getStatus(),
                 row.getInviteMessage(),
                 row.getAgreedPayRate(),
-                row.getPayOfferNote(),
+                row.getPayClassification(),
                 row.getPayOfferUpdatedAt(),
                 row.getInvitedAt(),
                 row.getRespondedAt(),

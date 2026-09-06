@@ -133,20 +133,14 @@ public class CaregiverAgencyInterestService {
                     .build();
         }
         agencyRosterService.applyPayOfferOnAccept(
-                roster, request.payRate(), request.payOfferNote());
+                roster, request.payRate(), request.payClassification());
         AgencyCaregiver saved = agencyCaregiverRepository.save(roster);
         interest.setStatus(CaregiverAgencyInterestStatus.ACCEPTED);
         interest.setRespondedAt(now);
 
         User caregiverUser = profile.getUser();
-        String note = request.payOfferNote() != null && !request.payOfferNote().isBlank()
-                ? request.payOfferNote().trim()
-                : null;
-        String offer = "The offer is $"
-                + saved.getAgreedPayRate().toPlainString()
-                + " per hour"
-                + (note != null ? " (" + note + ")" : "")
-                + ".";
+        String offer = AgencyRosterService.offerSentence(
+                saved.getAgreedPayRate(), saved.getPayClassification());
         notificationService.notifyUser(
                 caregiverUser,
                 NotificationType.ROSTER_INVITE,
@@ -156,6 +150,7 @@ public class CaregiverAgencyInterestService {
                         + "\",\"agencyId\":\"" + agency.getId()
                         + "\",\"status\":\"ACTIVE\",\"action\":\"ROSTER_INVITE\""
                         + ",\"agreedPayRate\":" + saved.getAgreedPayRate().toPlainString()
+                        + ",\"payClassification\":\"" + saved.getPayClassification().name() + "\""
                         + "}");
 
         return toResponse(interestRepository.save(interest));

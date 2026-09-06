@@ -66,14 +66,17 @@ public class AgencyCaregiver {
     @Column(precision = 10, scale = 2)
     private BigDecimal agreedPayRate;
 
-    /** Clarifies the offer, e.g. "including taxes". */
-    @Column(length = 300)
-    private String payOfferNote;
+    /**
+     * Whether this offer is W-2 (agency payroll with taxes) or not W-2.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 16)
+    private RosterPayClassification payClassification;
 
     private Instant payOfferUpdatedAt;
 
     @CreatedDate
-    @Column(nullable = false, updatable = false)
+    @Column(nullable = false)
     private Instant invitedAt;
 
     private Instant respondedAt;

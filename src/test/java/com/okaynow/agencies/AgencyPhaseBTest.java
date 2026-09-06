@@ -123,11 +123,12 @@ class AgencyPhaseBTest {
                         .header("Authorization", "Bearer " + agencyToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"email":"%s","payRate":18.50,"payOfferNote":"including taxes","message":"Join our roster"}
+                                {"email":"%s","payRate":18.50,"payClassification":"W2","message":"Join our roster"}
                                 """.formatted(caregiverEmail)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("INVITED"))
-                .andExpect(jsonPath("$.agreedPayRate").value(18.50));
+                .andExpect(jsonPath("$.agreedPayRate").value(18.50))
+                .andExpect(jsonPath("$.payClassification").value("W2"));
 
         MvcResult invites = mockMvc.perform(get("/api/caregivers/me/roster-invites")
                         .header("Authorization", "Bearer " + caregiverToken))

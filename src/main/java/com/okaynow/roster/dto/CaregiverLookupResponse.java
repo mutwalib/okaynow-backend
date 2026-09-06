@@ -15,7 +15,10 @@ public record CaregiverLookupResponse(
         String city,
         String state,
         Integer serviceRadiusMiles,
+        /** True when ACTIVE or INVITED — cannot send another invite. */
         boolean alreadyOnRoster,
+        /** True when REMOVED — agency can send a new invite that requires accept. */
+        boolean canReinvite,
         String rosterStatus
 ) {
 }

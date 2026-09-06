@@ -70,6 +70,8 @@ public class PostgresEnumCheckConstraintConfig implements ApplicationRunner {
                 com.okaynow.users.domain.Qualification.class);
         sync("agency_caregivers", "status", "agency_caregivers_status_check",
                 com.okaynow.roster.domain.AgencyCaregiverStatus.class);
+        sync("agency_caregivers", "pay_classification", "agency_caregivers_pay_classification_check",
+                com.okaynow.roster.domain.RosterPayClassification.class);
     }
 
     private void sync(String table, String column, String constraint, Class<? extends Enum<?>> enumType) {

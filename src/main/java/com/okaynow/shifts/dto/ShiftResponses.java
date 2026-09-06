@@ -114,4 +114,13 @@ public final class ShiftResponses {
                 agencyId,
                 agencyDisplayName);
     }
+
+    /** Override pay rate (e.g. caregiver's agreed agency roster rate). */
+    public static ShiftResponse withPayRate(
+            ShiftResponse raw, java.math.BigDecimal payRate) {
+        if (raw == null) {
+            return null;
+        }
+        return copy(raw, payRate, raw.billRate(), raw.platformPaid());
+    }
 }

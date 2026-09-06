@@ -23,6 +23,7 @@ import com.okaynow.notifications.service.ShiftEventPublisher;
 import com.okaynow.payroll.domain.AgencySettings;
 import com.okaynow.payroll.service.AgencySettingsService;
 import com.okaynow.payroll.service.SettlementService;
+import com.okaynow.roster.service.AgencyRosterService;
 import com.okaynow.shifts.domain.Shift;
 import com.okaynow.shifts.domain.DayPeriod;
 import com.okaynow.shifts.domain.ShiftScheduleType;
@@ -91,6 +92,7 @@ public class ShiftService {
     private final AgencyAccessService agencyAccessService;
     private final HomeAgencyConnectionService homeAgencyConnectionService;
     private final ShiftAgencyLabelService shiftAgencyLabelService;
+    private final AgencyRosterService agencyRosterService;
     private final GeocodingService geocodingService;
     private final ShiftLocationService shiftLocationService;
 
@@ -592,7 +594,16 @@ public class ShiftService {
             }
         }
         ShiftResponse labeled = shiftAgencyLabelService.label(shift, shiftMapper.toResponse(shift));
-        return ShiftResponses.forViewer(labeled, actor.getRole());
+        ShiftResponse viewed = ShiftResponses.forViewer(labeled, actor.getRole());
+        if (actor.getRole() == Role.CAREGIVER && shift.getAgencyId() != null) {
+            return caregiverProfileRepository.findByUserId(actor.getId())
+                    .map(cg -> ShiftResponses.withPayRate(
+                            viewed,
+                            agencyRosterService.findAgreedPayRate(shift.getAgencyId(), cg.getId())
+                                    .orElse(null)))
+                    .orElse(viewed);
+        }
+        return viewed;
     }
 
     /**

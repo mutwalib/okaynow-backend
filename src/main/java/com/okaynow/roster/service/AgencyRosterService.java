@@ -5,12 +5,15 @@ import com.okaynow.agencies.support.AgencyAccessService;
 import com.okaynow.common.exception.BadRequestException;
 import com.okaynow.common.exception.ConflictException;
 import com.okaynow.common.exception.ResourceNotFoundException;
+import com.okaynow.notifications.domain.NotificationType;
+import com.okaynow.notifications.service.NotificationService;
 import com.okaynow.roster.domain.AgencyCaregiver;
 import com.okaynow.roster.domain.AgencyCaregiverStatus;
 import com.okaynow.roster.dto.AgencyRosterEntryResponse;
 import com.okaynow.roster.dto.AgencyRosterMemberDetailResponse;
 import com.okaynow.roster.dto.CaregiverLookupResponse;
 import com.okaynow.roster.dto.InviteRosterCaregiverRequest;
+import com.okaynow.roster.dto.UpdateRosterPayOfferRequest;
 import com.okaynow.roster.repository.AgencyCaregiverRepository;
 import com.okaynow.users.domain.CaregiverProfile;
 import com.okaynow.users.domain.Role;
@@ -21,18 +24,28 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class AgencyRosterService {
 
+    private static final EnumSet<AgencyCaregiverStatus> RATE_VISIBLE = EnumSet.of(
+            AgencyCaregiverStatus.INVITED,
+            AgencyCaregiverStatus.ACTIVE,
+            AgencyCaregiverStatus.SUSPENDED);
+
     private final AgencyCaregiverRepository agencyCaregiverRepository;
     private final AgencyAccessService agencyAccessService;
     private final CaregiverProfileRepository caregiverProfileRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
     @Transactional(readOnly = true)
     public List<AgencyRosterEntryResponse> listForAgency(UUID agencyUserId) {
@@ -104,6 +117,27 @@ public class AgencyRosterService {
                 .toList();
     }
 
+    /**
+     * Agreed pay for an agency↔caregiver relationship when the row is still live.
+     * Used so caregivers never see the agency's default/standard shift rate.
+     */
+    @Transactional(readOnly = true)
+    public Optional<BigDecimal> findAgreedPayRate(UUID agencyId, UUID caregiverProfileId) {
+        if (agencyId == null || caregiverProfileId == null) {
+            return Optional.empty();
+        }
+        return agencyCaregiverRepository.findByAgencyIdAndCaregiverProfileId(agencyId, caregiverProfileId)
+                .filter(r -> RATE_VISIBLE.contains(r.getStatus()))
+                .map(AgencyCaregiver::getAgreedPayRate)
+                .filter(rate -> rate != null && rate.compareTo(BigDecimal.ZERO) > 0);
+    }
+
+    @Transactional(readOnly = true)
+    public BigDecimal resolveCaregiverPayRate(
+            UUID agencyId, UUID caregiverProfileId, BigDecimal fallback) {
+        return findAgreedPayRate(agencyId, caregiverProfileId).orElse(fallback);
+    }
+
     @Transactional
     public AgencyRosterEntryResponse invite(UUID agencyUserId, InviteRosterCaregiverRequest request) {
         Agency agency = agencyAccessService.requireAgencyForUser(agencyUserId);
@@ -111,6 +145,8 @@ public class AgencyRosterService {
         if (request.email() == null || request.email().isBlank()) {
             throw new BadRequestException("Caregiver email is required");
         }
+        BigDecimal payRate = requirePayRate(request.payRate());
+        String payNote = trimOrNull(request.payOfferNote());
         User caregiverUser = userRepository.findByEmail(request.email().trim().toLowerCase())
                 .orElseThrow(() -> new BadRequestException(
                         "No caregiver account exists for that email — they must register as a caregiver first"));
@@ -124,8 +160,10 @@ public class AgencyRosterService {
                     "This caregiver is not accepting agency roster invites. Ask them to enable Agency rosters on their profile.");
         }
 
+        Instant now = Instant.now();
         var existing = agencyCaregiverRepository.findByAgencyIdAndCaregiverProfileId(
                 agency.getId(), profile.getId());
+        AgencyCaregiver saved;
         if (existing.isPresent()) {
             AgencyCaregiverStatus status = existing.get().getStatus();
             if (status == AgencyCaregiverStatus.INVITED || status == AgencyCaregiverStatus.ACTIVE) {
@@ -134,18 +172,52 @@ public class AgencyRosterService {
             AgencyCaregiver row = existing.get();
             row.setStatus(AgencyCaregiverStatus.INVITED);
             row.setInviteMessage(trimOrNull(request.message()));
+            applyPayOffer(row, payRate, payNote, now);
             row.setRespondedAt(null);
             row.setRemovedAt(null);
-            return toResponse(agencyCaregiverRepository.save(row));
+            saved = agencyCaregiverRepository.save(row);
+        } else {
+            AgencyCaregiver row = AgencyCaregiver.builder()
+                    .agency(agency)
+                    .caregiverProfile(profile)
+                    .status(AgencyCaregiverStatus.INVITED)
+                    .inviteMessage(trimOrNull(request.message()))
+                    .agreedPayRate(payRate)
+                    .payOfferNote(payNote)
+                    .payOfferUpdatedAt(now)
+                    .build();
+            saved = agencyCaregiverRepository.save(row);
         }
+        notifyCaregiver(
+                caregiverUser,
+                NotificationType.ROSTER_INVITE,
+                "Roster invite from " + agency.getDisplayName(),
+                inviteBody(agency, payRate, payNote, trimOrNull(request.message())),
+                saved);
+        return toResponse(saved);
+    }
 
-        AgencyCaregiver row = AgencyCaregiver.builder()
-                .agency(agency)
-                .caregiverProfile(profile)
-                .status(AgencyCaregiverStatus.INVITED)
-                .inviteMessage(trimOrNull(request.message()))
-                .build();
-        return toResponse(agencyCaregiverRepository.save(row));
+    @Transactional
+    public AgencyRosterEntryResponse updatePayOffer(
+            UUID agencyUserId, UUID rosterId, UpdateRosterPayOfferRequest request) {
+        Agency agency = agencyAccessService.requireAgencyForUser(agencyUserId);
+        agencyAccessService.assertAgencyAllowsWrites(agency);
+        AgencyCaregiver row = requireAgencyRosterRow(agency, rosterId);
+        if (row.getStatus() == AgencyCaregiverStatus.REMOVED) {
+            throw new BadRequestException("Cannot revise pay for a removed roster member — invite them again");
+        }
+        BigDecimal payRate = requirePayRate(request.payRate());
+        String payNote = trimOrNull(request.payOfferNote());
+        applyPayOffer(row, payRate, payNote, Instant.now());
+        AgencyCaregiver saved = agencyCaregiverRepository.save(row);
+        User caregiverUser = saved.getCaregiverProfile().getUser();
+        notifyCaregiver(
+                caregiverUser,
+                NotificationType.ROSTER_PAY_OFFER_UPDATED,
+                "Pay offer updated — " + agency.getDisplayName(),
+                offerRevisionBody(agency, payRate, payNote),
+                saved);
+        return toResponse(saved);
     }
 
     @Transactional
@@ -160,6 +232,10 @@ public class AgencyRosterService {
                 .orElseThrow(() -> new ResourceNotFoundException("Roster invite not found"));
         if (row.getStatus() != AgencyCaregiverStatus.INVITED) {
             throw new BadRequestException("This invite is no longer pending");
+        }
+        if (row.getAgreedPayRate() == null || row.getAgreedPayRate().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BadRequestException(
+                    "This invite has no pay offer. Ask the agency to resend with an hourly rate.");
         }
         row.setStatus(AgencyCaregiverStatus.ACTIVE);
         row.setRespondedAt(Instant.now());
@@ -188,13 +264,24 @@ public class AgencyRosterService {
         if (row.getStatus() == AgencyCaregiverStatus.REMOVED) {
             throw new BadRequestException("This caregiver is already removed from the roster");
         }
-        if (row.getStatus() == AgencyCaregiverStatus.INVITED) {
-            throw new BadRequestException("Cancel a pending invite instead of removing");
-        }
+        boolean wasInvite = row.getStatus() == AgencyCaregiverStatus.INVITED;
         row.setStatus(AgencyCaregiverStatus.REMOVED);
         row.setRemovedAt(Instant.now());
         row.setRespondedAt(Instant.now());
-        return toResponse(agencyCaregiverRepository.save(row));
+        AgencyCaregiver saved = agencyCaregiverRepository.save(row);
+        User caregiverUser = saved.getCaregiverProfile().getUser();
+        notifyCaregiver(
+                caregiverUser,
+                NotificationType.ROSTER_REMOVED,
+                wasInvite
+                        ? "Roster invite cancelled — " + agency.getDisplayName()
+                        : "Removed from roster — " + agency.getDisplayName(),
+                wasInvite
+                        ? agency.getDisplayName() + " cancelled your pending roster invite."
+                        : agency.getDisplayName()
+                                + " removed you from their roster. You will no longer see their shifts.",
+                saved);
+        return toResponse(saved);
     }
 
     @Transactional
@@ -217,6 +304,70 @@ public class AgencyRosterService {
                         "Caregiver must be an active member of the agency roster"));
     }
 
+    /** Apply pay when accepting a caregiver interest / hiring application. */
+    public void applyPayOfferOnAccept(
+            AgencyCaregiver row, BigDecimal payRate, String payOfferNote) {
+        applyPayOffer(row, requirePayRate(payRate), trimOrNull(payOfferNote), Instant.now());
+    }
+
+    private void applyPayOffer(
+            AgencyCaregiver row, BigDecimal payRate, String payNote, Instant at) {
+        row.setAgreedPayRate(payRate);
+        row.setPayOfferNote(payNote);
+        row.setPayOfferUpdatedAt(at);
+    }
+
+    private void notifyCaregiver(
+            User caregiverUser,
+            NotificationType type,
+            String title,
+            String body,
+            AgencyCaregiver row) {
+        String payload = "{\"rosterId\":\"" + row.getId()
+                + "\",\"agencyId\":\"" + row.getAgency().getId()
+                + "\",\"status\":\"" + row.getStatus().name()
+                + "\",\"action\":\"" + type.name() + "\"";
+        if (row.getAgreedPayRate() != null) {
+            payload += ",\"agreedPayRate\":" + row.getAgreedPayRate().toPlainString();
+        }
+        payload += "}";
+        notificationService.notifyUser(caregiverUser, type, title, body, payload);
+    }
+
+    private static String inviteBody(
+            Agency agency, BigDecimal payRate, String payNote, String message) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(agency.getDisplayName()).append(" invited you to their roster. ");
+        sb.append(offerSentence(payRate, payNote));
+        if (message != null) {
+            sb.append(" Message: ").append(message);
+        }
+        return sb.toString();
+    }
+
+    private static String offerRevisionBody(Agency agency, BigDecimal payRate, String payNote) {
+        return agency.getDisplayName() + " updated your pay offer. " + offerSentence(payRate, payNote);
+    }
+
+    private static String offerSentence(BigDecimal payRate, String payNote) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("The offer is $")
+                .append(payRate.setScale(2, RoundingMode.HALF_UP).toPlainString())
+                .append(" per hour");
+        if (payNote != null) {
+            sb.append(" (").append(payNote).append(")");
+        }
+        sb.append(".");
+        return sb.toString();
+    }
+
+    private static BigDecimal requirePayRate(BigDecimal payRate) {
+        if (payRate == null || payRate.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BadRequestException("Hourly pay offer is required (must be greater than 0)");
+        }
+        return payRate.setScale(2, RoundingMode.HALF_UP);
+    }
+
     private AgencyRosterEntryResponse toResponse(AgencyCaregiver row) {
         CaregiverProfile cg = row.getCaregiverProfile();
         return new AgencyRosterEntryResponse(
@@ -229,6 +380,9 @@ public class AgencyRosterService {
                 cg.getUser().getEmail(),
                 row.getStatus(),
                 row.getInviteMessage(),
+                row.getAgreedPayRate(),
+                row.getPayOfferNote(),
+                row.getPayOfferUpdatedAt(),
                 row.getInvitedAt(),
                 row.getRespondedAt());
     }
@@ -240,6 +394,9 @@ public class AgencyRosterService {
                 row.getId(),
                 row.getStatus(),
                 row.getInviteMessage(),
+                row.getAgreedPayRate(),
+                row.getPayOfferNote(),
+                row.getPayOfferUpdatedAt(),
                 row.getInvitedAt(),
                 row.getRespondedAt(),
                 row.getRemovedAt(),

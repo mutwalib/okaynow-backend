@@ -13,6 +13,7 @@ import com.okaynow.payroll.domain.ShiftSettlement;
 import com.okaynow.payroll.dto.SettlementResponse;
 import com.okaynow.payroll.repository.ShiftSettlementRepository;
 import com.okaynow.payroll.support.PayPeriodCalculator;
+import com.okaynow.roster.service.AgencyRosterService;
 import com.okaynow.shifts.domain.Shift;
 import com.okaynow.shifts.domain.ShiftStatus;
 import com.okaynow.shifts.repository.ShiftRepository;
@@ -49,6 +50,7 @@ public class SettlementService {
     private final ClientProfileRepository clientProfileRepository;
     private final FacilityProfileRepository facilityProfileRepository;
     private final AgencySettingsService agencySettingsService;
+    private final AgencyRosterService agencyRosterService;
     private final AuditLogService auditLogService;
 
     /**
@@ -211,7 +213,11 @@ public class SettlementService {
         BigDecimal surge = shift.getSurgeBonusPay() != null
                 ? shift.getSurgeBonusPay()
                 : BigDecimal.ZERO;
-        BigDecimal effectivePay = shift.getPayRate().add(surge);
+        BigDecimal basePay = agencyRosterService.resolveCaregiverPayRate(
+                shift.getAgencyId(),
+                claim.getCaregiverProfile().getId(),
+                shift.getPayRate());
+        BigDecimal effectivePay = basePay.add(surge);
         BigDecimal clientAmount = shift.getBillRate().multiply(hours).setScale(2, RoundingMode.HALF_UP);
         BigDecimal caregiverAmount = effectivePay.multiply(hours).setScale(2, RoundingMode.HALF_UP);
         if (claim.getTravelPayAmount() != null) {

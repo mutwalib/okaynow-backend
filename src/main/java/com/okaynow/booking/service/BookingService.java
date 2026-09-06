@@ -31,6 +31,7 @@ import com.okaynow.payroll.service.InvoiceService;
 import com.okaynow.payroll.service.SettlementService;
 import com.okaynow.roster.domain.AgencyCaregiverStatus;
 import com.okaynow.roster.repository.AgencyCaregiverRepository;
+import com.okaynow.roster.service.AgencyRosterService;
 import com.okaynow.staffing.service.ClientStaffingService;
 import com.okaynow.shifts.domain.Shift;
 import com.okaynow.shifts.domain.ShiftStatus;
@@ -94,6 +95,7 @@ public class BookingService {
     private final DriveTimeService driveTimeService;
     private final CaregiverStaffingConstraintService staffingConstraintService;
     private final AgencyCaregiverRepository agencyCaregiverRepository;
+    private final AgencyRosterService agencyRosterService;
     private final ShiftAgencyLabelService shiftAgencyLabelService;
     private final ShiftLocationService shiftLocationService;
     private final PastShiftExpiryService pastShiftExpiryService;
@@ -1574,6 +1576,13 @@ public class BookingService {
         var shift = shiftAgencyLabelService.label(entity, shiftMapper.toResponse(entity));
         if (redactForCaregiver) {
             shift = ShiftResponses.forViewer(shift, Role.CAREGIVER);
+            if (entity.getAgencyId() != null) {
+                // Agency shifts: show this caregiver's agreed roster rate, never agency default.
+                java.math.BigDecimal agreed = agencyRosterService
+                        .findAgreedPayRate(entity.getAgencyId(), caregiver.getId())
+                        .orElse(null);
+                shift = ShiftResponses.withPayRate(shift, agreed);
+            }
         }
         return new ShiftClaimResponse(
                 claim.getId(),

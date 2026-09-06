@@ -23,6 +23,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import jakarta.persistence.EntityListeners;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -57,6 +58,19 @@ public class AgencyCaregiver {
 
     @Column(length = 500)
     private String inviteMessage;
+
+    /**
+     * Agreed caregiver pay for this agency relationship (not the agency default).
+     * Shown on invites and agency shifts for this caregiver; used in settlement.
+     */
+    @Column(precision = 10, scale = 2)
+    private BigDecimal agreedPayRate;
+
+    /** Clarifies the offer, e.g. "including taxes". */
+    @Column(length = 300)
+    private String payOfferNote;
+
+    private Instant payOfferUpdatedAt;
 
     @CreatedDate
     @Column(nullable = false, updatable = false)

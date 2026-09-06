@@ -15,8 +15,8 @@ import org.springframework.stereotype.Component;
 
 @Generated(
     value = "org.mapstruct.ap.MappingProcessor",
-    date = "2026-08-20T20:39:09-0400",
-    comments = "version: 1.5.5.Final, compiler: Eclipse JDT (IDE) 3.46.100.v20260624-0231, environment: Java 21.0.11 (Eclipse Adoptium)"
+    date = "2026-09-06T13:48:11-0400",
+    comments = "version: 1.5.5.Final, compiler: javac, environment: Java 26.0.1 (Eclipse Adoptium)"
 )
 @Component
 public class ShiftMapperImpl implements ShiftMapper {
@@ -56,6 +56,8 @@ public class ShiftMapperImpl implements ShiftMapper {
         int escalationRadiusBonusMiles = 0;
         UUID createdBy = null;
         Instant createdAt = null;
+        boolean agencyCoverageRequested = false;
+        UUID agencyId = null;
 
         id = shift.getId();
         clientProfileId = shift.getClientProfileId();
@@ -86,8 +88,12 @@ public class ShiftMapperImpl implements ShiftMapper {
         escalationRadiusBonusMiles = shift.getEscalationRadiusBonusMiles();
         createdBy = shift.getCreatedBy();
         createdAt = shift.getCreatedAt();
+        agencyCoverageRequested = shift.isAgencyCoverageRequested();
+        agencyId = shift.getAgencyId();
 
-        ShiftResponse shiftResponse = new ShiftResponse( id, clientProfileId, facilityProfileId, requiredQualification, date, startTime, endTime, addressLine, city, state, zip, lat, lng, payRate, billRate, status, scheduleType, seriesId, notes, platformPaid, marketplacePosted, marketplaceSlots, requiredHeadcount, filledSlots, surgeBonusPay, surgeTierApplied, escalationRadiusBonusMiles, createdBy, createdAt );
+        String agencyDisplayName = null;
+
+        ShiftResponse shiftResponse = new ShiftResponse( id, clientProfileId, facilityProfileId, requiredQualification, date, startTime, endTime, addressLine, city, state, zip, lat, lng, payRate, billRate, status, scheduleType, seriesId, notes, platformPaid, marketplacePosted, marketplaceSlots, requiredHeadcount, filledSlots, surgeBonusPay, surgeTierApplied, escalationRadiusBonusMiles, createdBy, createdAt, agencyCoverageRequested, agencyId, agencyDisplayName );
 
         return shiftResponse;
     }

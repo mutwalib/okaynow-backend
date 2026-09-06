@@ -6,6 +6,7 @@ import com.okaynow.common.exception.ResourceNotFoundException;
 import com.okaynow.common.geo.GeoUtils;
 import com.okaynow.roster.domain.AgencyCaregiverStatus;
 import com.okaynow.roster.repository.AgencyCaregiverRepository;
+import com.okaynow.roster.service.AgencyRosterService;
 import com.okaynow.evv.support.ShiftWindows;
 import com.okaynow.shifts.domain.Shift;
 import com.okaynow.shifts.dto.ShiftResponse;
@@ -20,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -33,6 +35,7 @@ public class CaregiverAgencyShiftService {
 
     private final CaregiverProfileRepository caregiverProfileRepository;
     private final AgencyCaregiverRepository agencyCaregiverRepository;
+    private final AgencyRosterService agencyRosterService;
     private final ShiftRepository shiftRepository;
     private final ShiftMapper shiftMapper;
     private final ShiftAgencyLabelService shiftAgencyLabelService;
@@ -70,7 +73,11 @@ public class CaregiverAgencyShiftService {
                 .map(shift -> {
                     ShiftResponse labeled = shiftAgencyLabelService.label(
                             shift, shiftMapper.toResponse(shift), names);
-                    return ShiftResponses.forViewer(labeled, Role.CAREGIVER);
+                    ShiftResponse viewed = ShiftResponses.forViewer(labeled, Role.CAREGIVER);
+                    BigDecimal agreed = agencyRosterService
+                            .findAgreedPayRate(shift.getAgencyId(), caregiver.getId())
+                            .orElse(null);
+                    return ShiftResponses.withPayRate(viewed, agreed);
                 })
                 .toList();
     }

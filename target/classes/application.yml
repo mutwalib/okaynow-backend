@@ -53,6 +53,18 @@ app:
   upload:
     dir: ${APP_UPLOAD_DIR:./uploads}
     max-bytes: ${APP_UPLOAD_MAX_BYTES:5242880}
+  stripe:
+    secret-key: ${STRIPE_SECRET_KEY:}
+    webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+    success-url: ${STRIPE_SUCCESS_URL:http://localhost:3000/agency/settings/billing?checkout=success}
+    cancel-url: ${STRIPE_CANCEL_URL:http://localhost:3000/agency/settings/billing?checkout=cancel}
+    price-starter: ${STRIPE_PRICE_STARTER:}
+    price-professional: ${STRIPE_PRICE_PROFESSIONAL:}
+    price-featured: ${STRIPE_PRICE_FEATURED:}
+    connect-return-url: ${STRIPE_CONNECT_RETURN_URL:http://localhost:3000/agency/settings/billing?connect=return}
+    connect-refresh-url: ${STRIPE_CONNECT_REFRESH_URL:http://localhost:3000/agency/settings/billing?connect=refresh}
+    invoice-success-url: ${STRIPE_INVOICE_SUCCESS_URL:http://localhost:3000/client/billing?paid=success}
+    invoice-cancel-url: ${STRIPE_INVOICE_CANCEL_URL:http://localhost:3000/client/billing?paid=cancel}
   service-region:
     # Comma-expand later (e.g. MA,RI). ZIP prefixes keep postal checks strict per state.
     # Quote ZIP3 values — unquoted 010 is parsed as a number and loses the leading zero.

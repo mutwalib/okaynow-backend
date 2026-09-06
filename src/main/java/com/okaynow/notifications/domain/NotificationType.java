@@ -32,5 +32,11 @@ public enum NotificationType {
     INVOICE_SENT,
     ONBOARDING_INFO_REQUESTED,
     ACCOUNT_APPROVED,
+    /** Agency invited caregiver to roster (with pay offer). */
+    ROSTER_INVITE,
+    /** Agency revised the agreed pay offer on an existing roster row. */
+    ROSTER_PAY_OFFER_UPDATED,
+    /** Agency removed caregiver from roster or cancelled a pending invite. */
+    ROSTER_REMOVED,
     SYSTEM
 }

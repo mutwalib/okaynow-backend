@@ -8,13 +8,18 @@ import com.okaynow.common.exception.ConflictException;
 import com.okaynow.common.exception.ResourceNotFoundException;
 import com.okaynow.hiring.domain.CaregiverAgencyInterest;
 import com.okaynow.hiring.domain.CaregiverAgencyInterestStatus;
+import com.okaynow.hiring.dto.AcceptCaregiverInterestRequest;
 import com.okaynow.hiring.dto.CaregiverAgencyInterestResponse;
 import com.okaynow.hiring.dto.ExpressInterestRequest;
 import com.okaynow.hiring.repository.CaregiverAgencyInterestRepository;
+import com.okaynow.notifications.domain.NotificationType;
+import com.okaynow.notifications.service.NotificationService;
 import com.okaynow.roster.domain.AgencyCaregiver;
 import com.okaynow.roster.domain.AgencyCaregiverStatus;
 import com.okaynow.roster.repository.AgencyCaregiverRepository;
+import com.okaynow.roster.service.AgencyRosterService;
 import com.okaynow.users.domain.CaregiverProfile;
+import com.okaynow.users.domain.User;
 import com.okaynow.users.repository.CaregiverProfileRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -34,6 +39,8 @@ public class CaregiverAgencyInterestService {
     private final AgencyAccessService agencyAccessService;
     private final CaregiverProfileRepository caregiverProfileRepository;
     private final AgencyCaregiverRepository agencyCaregiverRepository;
+    private final AgencyRosterService agencyRosterService;
+    private final NotificationService notificationService;
 
     @Transactional(readOnly = true)
     public List<CaregiverAgencyInterestResponse> listForCaregiver(UUID caregiverUserId) {
@@ -93,7 +100,8 @@ public class CaregiverAgencyInterestService {
     }
 
     @Transactional
-    public CaregiverAgencyInterestResponse accept(UUID agencyUserId, UUID interestId) {
+    public CaregiverAgencyInterestResponse accept(
+            UUID agencyUserId, UUID interestId, AcceptCaregiverInterestRequest request) {
         Agency agency = agencyAccessService.requireAgencyForUser(agencyUserId);
         agencyAccessService.assertAgencyAllowsWrites(agency);
         CaregiverAgencyInterest interest = interestRepository.findById(interestId)
@@ -105,24 +113,51 @@ public class CaregiverAgencyInterestService {
             throw new BadRequestException("This application was already handled");
         }
         CaregiverProfile profile = interest.getCaregiverProfile();
+        Instant now = Instant.now();
+        AgencyCaregiver roster;
         var rosterOpt = agencyCaregiverRepository.findByAgencyIdAndCaregiverProfileId(
                 agency.getId(), profile.getId());
         if (rosterOpt.isPresent()) {
-            AgencyCaregiver roster = rosterOpt.get();
+            roster = rosterOpt.get();
             roster.setStatus(AgencyCaregiverStatus.ACTIVE);
-            roster.setRespondedAt(Instant.now());
-            agencyCaregiverRepository.save(roster);
+            roster.setRespondedAt(now);
+            roster.setRemovedAt(null);
+            roster.setInviteMessage("Accepted from caregiver interest");
         } else {
-            agencyCaregiverRepository.save(AgencyCaregiver.builder()
+            roster = AgencyCaregiver.builder()
                     .agency(agency)
                     .caregiverProfile(profile)
                     .status(AgencyCaregiverStatus.ACTIVE)
                     .inviteMessage("Accepted from caregiver interest")
-                    .respondedAt(Instant.now())
-                    .build());
+                    .respondedAt(now)
+                    .build();
         }
+        agencyRosterService.applyPayOfferOnAccept(
+                roster, request.payRate(), request.payOfferNote());
+        AgencyCaregiver saved = agencyCaregiverRepository.save(roster);
         interest.setStatus(CaregiverAgencyInterestStatus.ACCEPTED);
-        interest.setRespondedAt(Instant.now());
+        interest.setRespondedAt(now);
+
+        User caregiverUser = profile.getUser();
+        String note = request.payOfferNote() != null && !request.payOfferNote().isBlank()
+                ? request.payOfferNote().trim()
+                : null;
+        String offer = "The offer is $"
+                + saved.getAgreedPayRate().toPlainString()
+                + " per hour"
+                + (note != null ? " (" + note + ")" : "")
+                + ".";
+        notificationService.notifyUser(
+                caregiverUser,
+                NotificationType.ROSTER_INVITE,
+                "You're on the roster — " + agency.getDisplayName(),
+                agency.getDisplayName() + " accepted your application. " + offer,
+                "{\"rosterId\":\"" + saved.getId()
+                        + "\",\"agencyId\":\"" + agency.getId()
+                        + "\",\"status\":\"ACTIVE\",\"action\":\"ROSTER_INVITE\""
+                        + ",\"agreedPayRate\":" + saved.getAgreedPayRate().toPlainString()
+                        + "}");
+
         return toResponse(interestRepository.save(interest));
     }
 

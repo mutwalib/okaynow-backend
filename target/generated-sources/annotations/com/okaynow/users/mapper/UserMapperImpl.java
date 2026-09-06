@@ -21,8 +21,8 @@ import org.springframework.stereotype.Component;
 
 @Generated(
     value = "org.mapstruct.ap.MappingProcessor",
-    date = "2026-08-20T20:39:09-0400",
-    comments = "version: 1.5.5.Final, compiler: Eclipse JDT (IDE) 3.46.100.v20260624-0231, environment: Java 21.0.11 (Eclipse Adoptium)"
+    date = "2026-09-06T13:48:11-0400",
+    comments = "version: 1.5.5.Final, compiler: javac, environment: Java 26.0.1 (Eclipse Adoptium)"
 )
 @Component
 public class UserMapperImpl implements UserMapper {
@@ -74,8 +74,12 @@ public class UserMapperImpl implements UserMapper {
         Double homeLat = null;
         Double homeLng = null;
         String profilePhotoUrl = null;
+        String cvUrl = null;
+        Instant cvUploadedAt = null;
         BigDecimal ratingAvg = null;
         Integer ratingCount = null;
+        boolean independentShiftsEnabled = false;
+        boolean agencyRosterEnabled = false;
 
         userId = profileUserId( profile );
         id = profile.getId();
@@ -96,10 +100,14 @@ public class UserMapperImpl implements UserMapper {
         homeLat = profile.getHomeLat();
         homeLng = profile.getHomeLng();
         profilePhotoUrl = profile.getProfilePhotoUrl();
+        cvUrl = profile.getCvUrl();
+        cvUploadedAt = profile.getCvUploadedAt();
         ratingAvg = profile.getRatingAvg();
         ratingCount = profile.getRatingCount();
+        independentShiftsEnabled = profile.isIndependentShiftsEnabled();
+        agencyRosterEnabled = profile.isAgencyRosterEnabled();
 
-        CaregiverProfileResponse caregiverProfileResponse = new CaregiverProfileResponse( id, userId, firstName, lastName, qualifications, otherQualificationDetail, hourlyRateMin, hourlyRateMax, serviceRadiusMiles, homeAddressLine, homeCity, homeState, homeZip, homeLat, homeLng, profilePhotoUrl, ratingAvg, ratingCount );
+        CaregiverProfileResponse caregiverProfileResponse = new CaregiverProfileResponse( id, userId, firstName, lastName, qualifications, otherQualificationDetail, hourlyRateMin, hourlyRateMax, serviceRadiusMiles, homeAddressLine, homeCity, homeState, homeZip, homeLat, homeLng, profilePhotoUrl, cvUrl, cvUploadedAt, ratingAvg, ratingCount, independentShiftsEnabled, agencyRosterEnabled );
 
         return caregiverProfileResponse;
     }

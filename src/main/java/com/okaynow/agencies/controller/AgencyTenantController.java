@@ -20,6 +20,7 @@ import com.okaynow.agencies.support.AgencyAccessService;
 import com.okaynow.booking.dto.ShiftClaimResponse;
 import com.okaynow.connections.dto.HomeAgencyConnectionResponse;
 import com.okaynow.connections.service.HomeAgencyConnectionService;
+import com.okaynow.hiring.dto.AcceptCaregiverInterestRequest;
 import com.okaynow.hiring.dto.CaregiverAgencyInterestResponse;
 import com.okaynow.hiring.service.CaregiverAgencyInterestService;
 import com.okaynow.payroll.dto.ClientInvoiceResponse;
@@ -31,6 +32,7 @@ import com.okaynow.roster.dto.AgencyRosterEntryResponse;
 import com.okaynow.roster.dto.AgencyRosterMemberDetailResponse;
 import com.okaynow.roster.dto.CaregiverLookupResponse;
 import com.okaynow.roster.dto.InviteRosterCaregiverRequest;
+import com.okaynow.roster.dto.UpdateRosterPayOfferRequest;
 import com.okaynow.roster.service.AgencyRosterService;
 import com.okaynow.shiftrequests.dto.AgencyShiftRequestInboxResponse;
 import com.okaynow.shiftrequests.dto.ShiftRequestResponse;
@@ -213,9 +215,10 @@ public class AgencyTenantController {
     @PostMapping("/caregiver-interests/{interestId}/accept")
     public ResponseEntity<CaregiverAgencyInterestResponse> acceptInterest(
             Authentication authentication,
-            @PathVariable UUID interestId) {
+            @PathVariable UUID interestId,
+            @Valid @RequestBody AcceptCaregiverInterestRequest request) {
         return ResponseEntity.ok(
-                interestService.accept(currentUserId(authentication), interestId));
+                interestService.accept(currentUserId(authentication), interestId, request));
     }
 
     @PostMapping("/caregiver-interests/{interestId}/decline")
@@ -240,6 +243,15 @@ public class AgencyTenantController {
             Authentication authentication,
             @Valid @RequestBody InviteRosterCaregiverRequest request) {
         return agencyRosterService.invite(currentUserId(authentication), request);
+    }
+
+    @PatchMapping("/roster/{rosterId}/pay-offer")
+    public ResponseEntity<AgencyRosterEntryResponse> updateRosterPayOffer(
+            Authentication authentication,
+            @PathVariable UUID rosterId,
+            @Valid @RequestBody UpdateRosterPayOfferRequest request) {
+        return ResponseEntity.ok(
+                agencyRosterService.updatePayOffer(currentUserId(authentication), rosterId, request));
     }
 
     @PostMapping("/roster/{rosterId}/suspend")

@@ -1,5 +1,6 @@
 package com.okaynow.agencies.dto;
 
+import com.okaynow.agencies.domain.AgencyAccessStatus;
 import com.okaynow.agencies.domain.SubscriptionPlan;
 import com.okaynow.agencies.domain.SubscriptionStatus;
 import com.okaynow.users.domain.Qualification;
@@ -20,6 +21,10 @@ public record SuperAdminAgencyDetailResponse(
         String zip,
         String publicDescription,
         List<Qualification> qualificationsSupported,
+        AgencyAccessStatus accessStatus,
+        String accessStatusNote,
+        Instant approvedAt,
+        Instant accessStatusUpdatedAt,
         SubscriptionStatus subscriptionStatus,
         SubscriptionPlan subscriptionPlan,
         boolean directoryListed,

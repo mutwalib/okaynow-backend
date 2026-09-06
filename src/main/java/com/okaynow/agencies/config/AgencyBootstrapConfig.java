@@ -1,6 +1,7 @@
 package com.okaynow.agencies.config;
 
 import com.okaynow.agencies.domain.Agency;
+import com.okaynow.agencies.domain.AgencyAccessStatus;
 import com.okaynow.agencies.domain.SubscriptionPlan;
 import com.okaynow.agencies.domain.SubscriptionStatus;
 import com.okaynow.agencies.repository.AgencyRepository;
@@ -44,6 +45,9 @@ public class AgencyBootstrapConfig implements ApplicationRunner {
                 .state("MA")
                 .subscriptionStatus(SubscriptionStatus.ACTIVE)
                 .subscriptionPlan(SubscriptionPlan.PROFESSIONAL)
+                .accessStatus(AgencyAccessStatus.ACTIVE)
+                .approvedAt(Instant.now())
+                .accessStatusUpdatedAt(Instant.now())
                 .subscriptionPeriodStart(Instant.now())
                 .subscriptionPeriodEnd(Instant.now().plus(365, ChronoUnit.DAYS))
                 .directoryListed(true)

@@ -1,6 +1,7 @@
 package com.okaynow.agencies.service;
 
 import com.okaynow.agencies.domain.Agency;
+import com.okaynow.agencies.domain.AgencyAccessStatus;
 import com.okaynow.agencies.domain.AgencyStaff;
 import com.okaynow.agencies.domain.AgencyStaffRole;
 import com.okaynow.agencies.domain.SubscriptionPlan;
@@ -10,6 +11,7 @@ import com.okaynow.agencies.dto.AgencyPublicProfileResponse;
 import com.okaynow.agencies.dto.SuperAdminAgencyDetailResponse;
 import com.okaynow.agencies.dto.SuperAdminAgencyResponse;
 import com.okaynow.agencies.dto.SuperAdminAgencyStaffResponse;
+import com.okaynow.agencies.dto.SuperAdminUpdateAccessRequest;
 import com.okaynow.agencies.dto.SuperAdminUpdateSubscriptionRequest;
 import com.okaynow.agencies.dto.UpdateAgencyDirectoryProfileRequest;
 import com.okaynow.agencies.repository.AgencyRepository;
@@ -60,6 +62,8 @@ public class AgencyService {
                 .city(city.trim())
                 .state(region.state())
                 .zip(region.zip())
+                .accessStatus(AgencyAccessStatus.PENDING_APPROVAL)
+                .accessStatusUpdatedAt(Instant.now())
                 .subscriptionStatus(SubscriptionStatus.TRIAL)
                 .subscriptionPlan(SubscriptionPlan.STARTER)
                 .subscriptionPeriodStart(Instant.now())
@@ -176,6 +180,38 @@ public class AgencyService {
         return toSuperAdminResponse(agencyRepository.save(agency));
     }
 
+    @Transactional
+    public SuperAdminAgencyResponse updateAccessForSuperAdmin(
+            UUID agencyId, SuperAdminUpdateAccessRequest request) {
+        Agency agency = agencyRepository.findById(agencyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Agency not found"));
+        AgencyAccessStatus previous = agency.getAccessStatus();
+        AgencyAccessStatus next = request.accessStatus();
+        agency.setAccessStatus(next);
+        agency.setAccessStatusUpdatedAt(Instant.now());
+        if (request.accessStatusNote() != null) {
+            String note = request.accessStatusNote().trim();
+            agency.setAccessStatusNote(note.isEmpty() ? null : note);
+        }
+        if (next == AgencyAccessStatus.ACTIVE) {
+            if (agency.getApprovedAt() == null
+                    || previous == AgencyAccessStatus.PENDING_APPROVAL) {
+                agency.setApprovedAt(Instant.now());
+            }
+            // Fresh 14-day trial window when approving a new signup.
+            if (previous == AgencyAccessStatus.PENDING_APPROVAL
+                    && agency.getSubscriptionStatus() == SubscriptionStatus.TRIAL) {
+                agency.setSubscriptionPeriodStart(Instant.now());
+                agency.setSubscriptionPeriodEnd(Instant.now().plus(14, ChronoUnit.DAYS));
+            }
+        }
+        if (next == AgencyAccessStatus.SUSPENDED || next == AgencyAccessStatus.BLOCKED) {
+            agency.setDirectoryListed(false);
+            agency.setHiringOpen(false);
+        }
+        return toSuperAdminResponse(agencyRepository.save(agency));
+    }
+
     private void geocodeAgency(Agency agency) {
         if (agency.getAddressLine() == null || agency.getCity() == null || agency.getZip() == null) {
             return;
@@ -218,7 +254,11 @@ public class AgencyService {
                 agency.getStripeConnectAccountId() != null
                         && agency.isStripeConnectChargesEnabled()
                         && agency.isStripeConnectPayoutsEnabled(),
-                agency.subscriptionAllowsWrites());
+                agency.subscriptionAllowsWrites(),
+                agency.getAccessStatus(),
+                agency.getAccessStatusNote(),
+                agency.getApprovedAt(),
+                agency.accessIsActive());
     }
 
     private AgencyPublicProfileResponse toPublicProfile(Agency agency) {
@@ -251,6 +291,7 @@ public class AgencyService {
                 agency.getDisplayName(),
                 agency.getCity(),
                 agency.getState(),
+                agency.getAccessStatus(),
                 agency.getSubscriptionStatus(),
                 agency.getSubscriptionPlan(),
                 agency.isDirectoryListed(),
@@ -274,6 +315,10 @@ public class AgencyService {
                 agency.getZip(),
                 agency.getPublicDescription(),
                 new ArrayList<>(agency.getQualificationsSupported()),
+                agency.getAccessStatus(),
+                agency.getAccessStatusNote(),
+                agency.getApprovedAt(),
+                agency.getAccessStatusUpdatedAt(),
                 agency.getSubscriptionStatus(),
                 agency.getSubscriptionPlan(),
                 agency.isDirectoryListed(),

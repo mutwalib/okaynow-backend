@@ -27,6 +27,7 @@
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/agencies/controller/SuperAdminAgencyController.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/agencies/controller/SuperAdminSubscriptionPlanController.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/agencies/domain/Agency.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/agencies/domain/AgencyAccessStatus.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/agencies/domain/AgencyStaff.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/agencies/domain/AgencyStaffRole.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/agencies/domain/PlanCapability.java
@@ -52,6 +53,7 @@
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/agencies/dto/SuperAdminAgencyDetailResponse.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/agencies/dto/SuperAdminAgencyResponse.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/agencies/dto/SuperAdminAgencyStaffResponse.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/agencies/dto/SuperAdminUpdateAccessRequest.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/agencies/dto/SuperAdminUpdateSubscriptionRequest.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/agencies/dto/UnassignAgencyShiftRequest.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/agencies/dto/UpdateAgencyDirectoryProfileRequest.java

@@ -41,10 +41,25 @@ public class AgencyAccessService {
     }
 
     public void assertAgencyAllowsWrites(Agency agency) {
+        if (!agency.accessIsActive()) {
+            throw new ForbiddenException(accessDeniedMessage(agency));
+        }
         if (!agency.subscriptionAllowsWrites()) {
             throw new ForbiddenException(
                     "Agency subscription is inactive. Renew billing to continue.");
         }
+    }
+
+    public static String accessDeniedMessage(Agency agency) {
+        return switch (agency.getAccessStatus()) {
+            case PENDING_APPROVAL ->
+                    "Your agency is awaiting OkayNow approval before you can use the console.";
+            case SUSPENDED ->
+                    "Your agency access is suspended. Contact OkayNow support for help.";
+            case BLOCKED ->
+                    "Your agency access is blocked. Contact OkayNow support for help.";
+            case ACTIVE -> "Agency access is restricted.";
+        };
     }
 
     public User requireSuperAdmin(UUID userId) {

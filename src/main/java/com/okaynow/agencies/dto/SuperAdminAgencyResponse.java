@@ -1,5 +1,6 @@
 package com.okaynow.agencies.dto;
 
+import com.okaynow.agencies.domain.AgencyAccessStatus;
 import com.okaynow.agencies.domain.SubscriptionPlan;
 import com.okaynow.agencies.domain.SubscriptionStatus;
 
@@ -12,6 +13,7 @@ public record SuperAdminAgencyResponse(
         String displayName,
         String city,
         String state,
+        AgencyAccessStatus accessStatus,
         SubscriptionStatus subscriptionStatus,
         SubscriptionPlan subscriptionPlan,
         boolean directoryListed,

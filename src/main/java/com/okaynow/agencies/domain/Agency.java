@@ -89,6 +89,24 @@ public class Agency {
     @Builder.Default
     private SubscriptionPlan subscriptionPlan = SubscriptionPlan.STARTER;
 
+    /**
+     * Operational access (approval / suspend / block). Independent of Stripe subscription.
+     * Existing tenants default to ACTIVE; new registrations set PENDING_APPROVAL explicitly.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 24, columnDefinition = "varchar(24) not null default 'ACTIVE'")
+    @Builder.Default
+    private AgencyAccessStatus accessStatus = AgencyAccessStatus.ACTIVE;
+
+    /** Optional admin note for the latest access decision (e.g. why suspended). */
+    @Column(length = 1000)
+    private String accessStatusNote;
+
+    /** When the agency was first approved (PENDING_APPROVAL → ACTIVE). */
+    private Instant approvedAt;
+
+    private Instant accessStatusUpdatedAt;
+
     private String stripeCustomerId;
 
     private String stripeSubscriptionId;
@@ -128,14 +146,28 @@ public class Agency {
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
+    public boolean accessIsActive() {
+        return accessStatus == AgencyAccessStatus.ACTIVE;
+    }
+
+    public boolean accessIsPendingApproval() {
+        return accessStatus == AgencyAccessStatus.PENDING_APPROVAL;
+    }
+
+    /** Billing/subscription window allows writes (ignores accessStatus). */
     public boolean subscriptionAllowsWrites() {
         return subscriptionStatus == SubscriptionStatus.ACTIVE
                 || subscriptionStatus == SubscriptionStatus.TRIAL
                 || subscriptionStatus == SubscriptionStatus.PAST_DUE;
     }
 
+    public boolean allowsOperationalWrites() {
+        return accessIsActive() && subscriptionAllowsWrites();
+    }
+
     public boolean subscriptionAllowsDirectoryListing() {
-        return directoryListed
+        return accessIsActive()
+                && directoryListed
                 && (subscriptionStatus == SubscriptionStatus.ACTIVE
                 || subscriptionStatus == SubscriptionStatus.TRIAL);
     }

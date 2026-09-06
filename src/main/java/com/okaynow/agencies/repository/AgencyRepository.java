@@ -20,6 +20,7 @@ public interface AgencyRepository extends JpaRepository<Agency, UUID> {
     @Query("""
             SELECT a FROM Agency a
             WHERE a.directoryListed = true
+              AND a.accessStatus = com.okaynow.agencies.domain.AgencyAccessStatus.ACTIVE
               AND a.subscriptionStatus IN (
                 com.okaynow.agencies.domain.SubscriptionStatus.ACTIVE,
                 com.okaynow.agencies.domain.SubscriptionStatus.TRIAL)

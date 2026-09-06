@@ -1,5 +1,6 @@
 package com.okaynow.agencies.dto;
 
+import com.okaynow.agencies.domain.AgencyAccessStatus;
 import com.okaynow.agencies.domain.SubscriptionPlan;
 import com.okaynow.agencies.domain.SubscriptionStatus;
 import com.okaynow.users.domain.Qualification;
@@ -32,6 +33,10 @@ public record AgencyMeResponse(
         String hiringNote,
         boolean stripeConfigured,
         boolean stripeConnectReady,
-        boolean subscriptionAllowsWrites
+        boolean subscriptionAllowsWrites,
+        AgencyAccessStatus accessStatus,
+        String accessStatusNote,
+        Instant approvedAt,
+        boolean accessAllowsConsole
 ) {
 }

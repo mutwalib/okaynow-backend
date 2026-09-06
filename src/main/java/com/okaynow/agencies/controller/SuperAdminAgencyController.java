@@ -2,6 +2,7 @@ package com.okaynow.agencies.controller;
 
 import com.okaynow.agencies.dto.SuperAdminAgencyDetailResponse;
 import com.okaynow.agencies.dto.SuperAdminAgencyResponse;
+import com.okaynow.agencies.dto.SuperAdminUpdateAccessRequest;
 import com.okaynow.agencies.dto.SuperAdminUpdateSubscriptionRequest;
 import com.okaynow.agencies.service.AgencyService;
 import com.okaynow.agencies.support.AgencyAccessService;
@@ -51,6 +52,15 @@ public class SuperAdminAgencyController {
             @Valid @RequestBody SuperAdminUpdateSubscriptionRequest request) {
         agencyAccessService.requireSuperAdmin(currentUserId(authentication));
         return ResponseEntity.ok(agencyService.updateSubscriptionForSuperAdmin(agencyId, request));
+    }
+
+    @PatchMapping("/{agencyId}/access")
+    public ResponseEntity<SuperAdminAgencyResponse> updateAccess(
+            Authentication authentication,
+            @PathVariable UUID agencyId,
+            @Valid @RequestBody SuperAdminUpdateAccessRequest request) {
+        agencyAccessService.requireSuperAdmin(currentUserId(authentication));
+        return ResponseEntity.ok(agencyService.updateAccessForSuperAdmin(agencyId, request));
     }
 
     private UUID currentUserId(Authentication authentication) {

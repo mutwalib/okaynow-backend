@@ -291,11 +291,16 @@
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/roster/domain/AgencyCaregiverStatus.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/roster/domain/RosterPayClassification.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/roster/dto/AgencyRosterEntryResponse.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/roster/dto/AgencyRosterHubResponse.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/roster/dto/AgencyRosterHubSummary.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/roster/dto/AgencyRosterMemberDetailResponse.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/roster/dto/AgencyRosterScheduleItem.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/roster/dto/AgencyRosterTimesheetItem.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/roster/dto/CaregiverLookupResponse.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/roster/dto/InviteRosterCaregiverRequest.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/roster/dto/UpdateRosterPayOfferRequest.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/roster/repository/AgencyCaregiverRepository.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/roster/service/AgencyRosterHubService.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/roster/service/AgencyRosterService.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/shiftrequests/controller/HomeShiftRequestController.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/shiftrequests/domain/ShiftRequest.java

@@ -193,6 +193,25 @@ public interface ShiftClaimRepository extends JpaRepository<ShiftClaim, UUID> {
             @Param("statuses") Collection<ShiftClaimStatus> statuses,
             @Param("fromDate") LocalDate fromDate);
 
+    @EntityGraph(attributePaths = {"shift", "caregiverProfile"})
+    @Query("""
+            select c from ShiftClaim c
+            where c.caregiverProfile.id = :caregiverProfileId
+              and c.shift.agencyId = :agencyId
+              and c.shift.date >= :fromDate
+              and c.shift.date <= :toDate
+              and c.status not in (
+                com.okaynow.booking.domain.ShiftClaimStatus.CANCELLED,
+                com.okaynow.booking.domain.ShiftClaimStatus.EXPIRED
+              )
+            order by c.shift.date desc, c.shift.startTime desc
+            """)
+    List<ShiftClaim> findAgencyCaregiverSchedule(
+            @Param("caregiverProfileId") UUID caregiverProfileId,
+            @Param("agencyId") UUID agencyId,
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate);
+
     @EntityGraph(attributePaths = {"shift"})
     @Query("""
             select c from ShiftClaim c

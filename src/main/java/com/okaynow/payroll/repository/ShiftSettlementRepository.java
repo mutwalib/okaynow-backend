@@ -116,6 +116,23 @@ public interface ShiftSettlementRepository extends JpaRepository<ShiftSettlement
 
     @Query("""
             select s from ShiftSettlement s
+            where s.caregiverProfileId = :caregiverProfileId
+              and s.shiftDate >= :dateFrom
+              and s.shiftDate <= :dateTo
+              and exists (
+                select 1 from com.okaynow.shifts.domain.Shift sh
+                where sh.id = s.shiftId and sh.agencyId = :agencyId
+              )
+            order by s.shiftDate desc
+            """)
+    List<ShiftSettlement> findAgencyCaregiverTimesheets(
+            @Param("agencyId") UUID agencyId,
+            @Param("caregiverProfileId") UUID caregiverProfileId,
+            @Param("dateFrom") LocalDate dateFrom,
+            @Param("dateTo") LocalDate dateTo);
+
+    @Query("""
+            select s from ShiftSettlement s
             where s.facilityProfileId is null
               and exists (
                 select 1 from com.okaynow.shifts.domain.Shift sh

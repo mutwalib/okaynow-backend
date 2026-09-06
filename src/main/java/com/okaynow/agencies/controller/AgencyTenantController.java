@@ -25,14 +25,18 @@ import com.okaynow.hiring.dto.CaregiverAgencyInterestResponse;
 import com.okaynow.hiring.service.CaregiverAgencyInterestService;
 import com.okaynow.payroll.dto.ClientInvoiceResponse;
 import com.okaynow.payroll.dto.AgencySettingsResponse;
+import com.okaynow.payroll.dto.SettlementResponse;
 import com.okaynow.payroll.dto.UpdateAgencySettingsRequest;
+import com.okaynow.payroll.dto.UpdatePaymentStatusRequest;
 import com.okaynow.payroll.service.AgencySettingsService;
 import com.okaynow.payroll.service.InvoiceService;
 import com.okaynow.roster.dto.AgencyRosterEntryResponse;
+import com.okaynow.roster.dto.AgencyRosterHubResponse;
 import com.okaynow.roster.dto.AgencyRosterMemberDetailResponse;
 import com.okaynow.roster.dto.CaregiverLookupResponse;
 import com.okaynow.roster.dto.InviteRosterCaregiverRequest;
 import com.okaynow.roster.dto.UpdateRosterPayOfferRequest;
+import com.okaynow.roster.service.AgencyRosterHubService;
 import com.okaynow.roster.service.AgencyRosterService;
 import com.okaynow.shiftrequests.dto.AgencyShiftRequestInboxResponse;
 import com.okaynow.shiftrequests.dto.ShiftRequestResponse;
@@ -89,6 +93,7 @@ public class AgencyTenantController {
     private final InvoiceService invoiceService;
     private final CaregiverAgencyInterestService interestService;
     private final AgencyRosterService agencyRosterService;
+    private final AgencyRosterHubService agencyRosterHubService;
     private final ShiftRequestService shiftRequestService;
     private final AgencyShiftService agencyShiftService;
     private final UserService userService;
@@ -235,6 +240,28 @@ public class AgencyTenantController {
             @PathVariable UUID rosterId) {
         return ResponseEntity.ok(
                 agencyRosterService.getMemberDetail(currentUserId(authentication), rosterId));
+    }
+
+    @GetMapping("/roster/{rosterId}/hub")
+    public ResponseEntity<AgencyRosterHubResponse> rosterHub(
+            Authentication authentication,
+            @PathVariable UUID rosterId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ResponseEntity.ok(
+                agencyRosterHubService.hub(currentUserId(authentication), rosterId, from, to));
+    }
+
+    @PatchMapping("/settlements/{settlementId}/caregiver-payment")
+    public ResponseEntity<SettlementResponse> markCaregiverPayment(
+            Authentication authentication,
+            @PathVariable UUID settlementId,
+            @Valid @RequestBody UpdatePaymentStatusRequest request) {
+        return ResponseEntity.ok(agencyRosterHubService.markCaregiverPayment(
+                currentUserId(authentication),
+                settlementId,
+                request,
+                userService.getByEmail(authentication.getName())));
     }
 
     @PostMapping("/roster/invite")

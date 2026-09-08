@@ -38,5 +38,11 @@ public enum NotificationType {
     ROSTER_PAY_OFFER_UPDATED,
     /** Agency removed caregiver from roster or cancelled a pending invite. */
     ROSTER_REMOVED,
+    /** Home/facility sent an opening to this agency (inbox). */
+    SHIFT_REQUEST_RECEIVED,
+    /** Agency accepted a home/facility opening (manual Accept). */
+    SHIFT_REQUEST_ACCEPTED,
+    /** AUTO_BROADCAST accepted and posted the opening without inbox click. */
+    SHIFT_REQUEST_AUTO_ACCEPTED,
     SYSTEM
 }

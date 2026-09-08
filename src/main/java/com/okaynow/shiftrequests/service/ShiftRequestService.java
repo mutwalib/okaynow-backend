@@ -1,8 +1,11 @@
 package com.okaynow.shiftrequests.service;
 
 import com.okaynow.agencies.domain.Agency;
+import com.okaynow.agencies.domain.ShiftRoutingMode;
 import com.okaynow.agencies.repository.AgencyRepository;
+import com.okaynow.agencies.repository.AgencyStaffRepository;
 import com.okaynow.agencies.support.AgencyAccessService;
+import com.okaynow.agencies.service.AgencyOpeningNotifier;
 import com.okaynow.agencies.service.AgencyShiftRoutingService;
 import com.okaynow.booking.domain.ShiftClaim;
 import com.okaynow.booking.domain.ShiftClaimStatus;
@@ -59,6 +62,7 @@ public class ShiftRequestService {
     private final ShiftRequestAgencyRepository shiftRequestAgencyRepository;
     private final HomeAgencyConnectionService connectionService;
     private final AgencyRepository agencyRepository;
+    private final AgencyStaffRepository agencyStaffRepository;
     private final AgencyAccessService agencyAccessService;
     private final ClientProfileRepository clientProfileRepository;
     private final FacilityProfileRepository facilityProfileRepository;
@@ -68,6 +72,7 @@ public class ShiftRequestService {
     private final AgencySettingsService agencySettingsService;
     private final ShiftRepository shiftRepository;
     private final AgencyShiftRoutingService agencyShiftRoutingService;
+    private final AgencyOpeningNotifier agencyOpeningNotifier;
     private final ShiftClaimRepository shiftClaimRepository;
     private final ShiftEventPublisher shiftEventPublisher;
 
@@ -220,8 +225,17 @@ public class ShiftRequestService {
                     .anyMatch(t -> t.getStatus() == ShiftRequestAgencyStatus.PENDING
                             && t.getAgency().getId().equals(targetAgencyId));
             if (alreadyPendingForTarget) {
-                shift.setAgencyCoverageRequested(true);
-                shiftRepository.save(shift);
+                ShiftRequestAgency pending = targets.stream()
+                        .filter(t -> t.getStatus() == ShiftRequestAgencyStatus.PENDING
+                                && t.getAgency().getId().equals(targetAgencyId))
+                        .findFirst()
+                        .orElseThrow();
+                if (!maybeAutoAccept(pending)) {
+                    // Already in inbox — nudge staff again on a repeat send.
+                    agencyOpeningNotifier.notifyRequestReceived(pending);
+                    shift.setAgencyCoverageRequested(true);
+                    shiftRepository.save(shift);
+                }
                 return;
             }
             boolean otherPending = targets.stream()
@@ -240,7 +254,12 @@ public class ShiftRequestService {
                 request.setNotes(notes);
             }
             shiftRequestRepository.save(request);
-            replaceExclusiveTarget(request, actor.getId(), targetAgencyId);
+            ShiftRequestAgency target = replaceExclusiveTarget(request, actor.getId(), targetAgencyId);
+            if (!maybeAutoAccept(target)) {
+                agencyOpeningNotifier.notifyRequestReceived(target);
+                shift.setAgencyCoverageRequested(true);
+                shiftRepository.save(shift);
+            }
         } else {
             var region = serviceRegionService.validate(shift.getState(), shift.getZip());
             Instant now = Instant.now();
@@ -262,10 +281,13 @@ public class ShiftRequestService {
                     .status(ShiftRequestStatus.OPEN)
                     .createdAt(now)
                     .build());
-            replaceExclusiveTarget(request, actor.getId(), targetAgencyId);
+            ShiftRequestAgency target = replaceExclusiveTarget(request, actor.getId(), targetAgencyId);
+            if (!maybeAutoAccept(target)) {
+                agencyOpeningNotifier.notifyRequestReceived(target);
+                shift.setAgencyCoverageRequested(true);
+                shiftRepository.save(shift);
+            }
         }
-        shift.setAgencyCoverageRequested(true);
-        shiftRepository.save(shift);
     }
 
     /**
@@ -482,6 +504,44 @@ public class ShiftRequestService {
         agencyAccessService.assertAgencyAllowsWrites(agency);
         ShiftRequestAgency row = shiftRequestAgencyRepository.findByIdAndAgencyId(inboxRowId, agency.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Shift request not found"));
+        return acceptInboxRow(agency, row, agencyUserId);
+    }
+
+    /**
+     * When the agency uses AUTO_BROADCAST, claim the opening and post to roster
+     * without waiting for an inbox Accept click.
+     */
+    private boolean maybeAutoAccept(ShiftRequestAgency row) {
+        if (row == null || row.getStatus() != ShiftRequestAgencyStatus.PENDING) {
+            return false;
+        }
+        Agency agency = row.getAgency();
+        AgencySettings settings = agencySettingsService.getOrCreateForAgency(agency.getId());
+        if (settings.getShiftRoutingMode() != ShiftRoutingMode.AUTO_BROADCAST) {
+            return false;
+        }
+        try {
+            agencyAccessService.assertAgencyAllowsWrites(agency);
+        } catch (RuntimeException ex) {
+            return false;
+        }
+        UUID actorUserId = agencyStaffRepository.findByAgencyIdWithUsers(agency.getId()).stream()
+                .map(staff -> staff.getUser().getId())
+                .findFirst()
+                .orElse(null);
+        if (actorUserId == null) {
+            return false;
+        }
+        acceptInboxRow(agency, row, actorUserId, true);
+        return true;
+    }
+
+    private ShiftRequestResponse acceptInboxRow(Agency agency, ShiftRequestAgency row, UUID agencyUserId) {
+        return acceptInboxRow(agency, row, agencyUserId, false);
+    }
+
+    private ShiftRequestResponse acceptInboxRow(
+            Agency agency, ShiftRequestAgency row, UUID agencyUserId, boolean autoBroadcast) {
         if (row.getStatus() != ShiftRequestAgencyStatus.PENDING) {
             throw new BadRequestException("This request was already handled");
         }
@@ -508,6 +568,9 @@ public class ShiftRequestService {
             source.setAgencyCoverageRequested(false);
             source.setPayRate(payRate);
             source.setBillRate(billRate);
+            if (source.getCreatedBy() == null) {
+                source.setCreatedBy(agencyUserId);
+            }
             savedShift = shiftRepository.save(source);
         } else {
             LocalDate shiftDate = request.getStartDate();
@@ -563,6 +626,8 @@ public class ShiftRequestService {
 
         request.setStatus(ShiftRequestStatus.FULFILLED);
         shiftRequestRepository.save(request);
+
+        agencyOpeningNotifier.notifyRequestAccepted(row, savedShift, autoBroadcast);
 
         return toResponse(request, shiftRequestAgencyRepository.findByShiftRequestId(request.getId()));
     }
@@ -630,12 +695,15 @@ public class ShiftRequestService {
         for (UUID agencyId : toAdd) {
             Agency agency = agencyRepository.findById(agencyId)
                     .orElseThrow(() -> new ResourceNotFoundException("Agency not found"));
-            shiftRequestAgencyRepository.save(ShiftRequestAgency.builder()
+            ShiftRequestAgency row = shiftRequestAgencyRepository.save(ShiftRequestAgency.builder()
                     .shiftRequest(request)
                     .agency(agency)
                     .status(ShiftRequestAgencyStatus.PENDING)
                     .createdAt(Instant.now())
                     .build());
+            if (!maybeAutoAccept(row)) {
+                agencyOpeningNotifier.notifyRequestReceived(row);
+            }
         }
     }
 
@@ -643,7 +711,8 @@ public class ShiftRequestService {
      * Facility coverage is exclusive: only {@code agencyId} stays PENDING.
      * Any other PENDING targets are declined so they leave other agencies' inboxes.
      */
-    private void replaceExclusiveTarget(ShiftRequest request, UUID requesterUserId, UUID agencyId) {
+    private ShiftRequestAgency replaceExclusiveTarget(
+            ShiftRequest request, UUID requesterUserId, UUID agencyId) {
         if (!connectionService.hasActiveConnection(requesterUserId, agencyId)) {
             throw new BadRequestException("You must be connected to the selected agency");
         }
@@ -670,14 +739,13 @@ public class ShiftRequestService {
                 if (selected.getCreatedAt() == null) {
                     selected.setCreatedAt(now);
                 }
-                shiftRequestAgencyRepository.save(selected);
+                selected = shiftRequestAgencyRepository.save(selected);
             }
-            // PENDING (or just reopened): already the exclusive target.
-            return;
+            return selected;
         }
         Agency agency = agencyRepository.findById(agencyId)
                 .orElseThrow(() -> new ResourceNotFoundException("Agency not found"));
-        shiftRequestAgencyRepository.save(ShiftRequestAgency.builder()
+        return shiftRequestAgencyRepository.save(ShiftRequestAgency.builder()
                 .shiftRequest(request)
                 .agency(agency)
                 .status(ShiftRequestAgencyStatus.PENDING)

@@ -101,6 +101,23 @@ public class NotificationService {
                 null, null, null, null, null, Instant.now()));
     }
 
+    /** Tenant-scoped board refresh for agency consoles. */
+    public void broadcastAgencyShiftBoard(
+            UUID agencyId,
+            String action,
+            UUID shiftId,
+            ShiftStatus status) {
+        messagingTemplate.convertAndSend(
+                "/topic/agencies/" + agencyId + "/shifts",
+                new ShiftBoardUpdate(
+                        action, shiftId, status, null,
+                        null, null, null, null, null, Instant.now()));
+        // Also ping the global board so open listeners refresh calendars.
+        messagingTemplate.convertAndSend("/topic/shifts", new ShiftBoardUpdate(
+                action, shiftId, status, null,
+                null, null, null, null, null, Instant.now()));
+    }
+
     private NotificationResponse toResponse(Notification n) {
         return new NotificationResponse(
                 n.getId(),

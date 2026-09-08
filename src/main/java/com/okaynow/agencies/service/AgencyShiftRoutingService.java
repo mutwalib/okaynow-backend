@@ -3,6 +3,7 @@ package com.okaynow.agencies.service;
 import com.okaynow.agencies.domain.ShiftRoutingMode;
 import com.okaynow.agencies.dto.BroadcastAgencyShiftRequest;
 import com.okaynow.agencies.dto.BroadcastAgencyShiftResponse;
+import com.okaynow.agencies.repository.AgencyStaffRepository;
 import com.okaynow.agencies.support.AgencyAccessService;
 import com.okaynow.booking.domain.ShiftClaimStatus;
 import com.okaynow.booking.repository.ShiftClaimRepository;
@@ -41,6 +42,7 @@ public class AgencyShiftRoutingService {
 
     private final AgencyAccessService agencyAccessService;
     private final AgencySettingsService agencySettingsService;
+    private final AgencyStaffRepository agencyStaffRepository;
     private final ShiftRepository shiftRepository;
     private final ShiftClaimRepository shiftClaimRepository;
     private final AgencyCaregiverRepository agencyCaregiverRepository;
@@ -54,7 +56,8 @@ public class AgencyShiftRoutingService {
     public void routeAfterHomeRequestAccepted(UUID agencyId, Shift shift) {
         AgencySettings settings = agencySettingsService.getOrCreateForAgency(agencyId);
         if (settings.getShiftRoutingMode() == ShiftRoutingMode.AUTO_BROADCAST) {
-            broadcastInternal(agencyId, shift.getId(), null, resolveActor(shift.getCreatedBy(), null));
+            User actor = resolveAgencyActor(agencyId);
+            broadcastInternal(agencyId, shift.getId(), null, actor);
         }
     }
 
@@ -132,6 +135,13 @@ public class AgencyShiftRoutingService {
             notified++;
         }
         return new BroadcastAgencyShiftResponse("ROSTER_OPEN", notified, shift.getId());
+    }
+
+    private User resolveAgencyActor(UUID agencyId) {
+        return agencyStaffRepository.findByAgencyIdWithUsers(agencyId).stream()
+                .map(staff -> staff.getUser())
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Agency staff not found"));
     }
 
     private User resolveActor(UUID createdBy, User fallback) {

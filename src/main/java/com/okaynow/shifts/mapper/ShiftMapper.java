@@ -9,5 +9,6 @@ import org.mapstruct.Mapping;
 public interface ShiftMapper {
 
     @Mapping(target = "agencyDisplayName", ignore = true)
+    @Mapping(target = "siteDisplayName", ignore = true)
     ShiftResponse toResponse(Shift shift);
 }

@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 
 @Generated(
     value = "org.mapstruct.ap.MappingProcessor",
-    date = "2026-09-07T20:50:49-0400",
+    date = "2026-09-07T22:02:29-0400",
     comments = "version: 1.5.5.Final, compiler: javac, environment: Java 26.0.1 (Eclipse Adoptium)"
 )
 @Component
@@ -92,8 +92,9 @@ public class ShiftMapperImpl implements ShiftMapper {
         agencyId = shift.getAgencyId();
 
         String agencyDisplayName = null;
+        String siteDisplayName = null;
 
-        ShiftResponse shiftResponse = new ShiftResponse( id, clientProfileId, facilityProfileId, requiredQualification, date, startTime, endTime, addressLine, city, state, zip, lat, lng, payRate, billRate, status, scheduleType, seriesId, notes, platformPaid, marketplacePosted, marketplaceSlots, requiredHeadcount, filledSlots, surgeBonusPay, surgeTierApplied, escalationRadiusBonusMiles, createdBy, createdAt, agencyCoverageRequested, agencyId, agencyDisplayName );
+        ShiftResponse shiftResponse = new ShiftResponse( id, clientProfileId, facilityProfileId, requiredQualification, date, startTime, endTime, addressLine, city, state, zip, lat, lng, payRate, billRate, status, scheduleType, seriesId, notes, platformPaid, marketplacePosted, marketplaceSlots, requiredHeadcount, filledSlots, surgeBonusPay, surgeTierApplied, escalationRadiusBonusMiles, createdBy, createdAt, agencyCoverageRequested, agencyId, agencyDisplayName, siteDisplayName );
 
         return shiftResponse;
     }

@@ -44,6 +44,8 @@ public record ShiftResponse(
         /** Tenant that owns / is staffing this shift; null for marketplace homes/facilities. */
         UUID agencyId,
         /** Present when {@code agencyId} is set — for caregiver open-board labeling. */
-        String agencyDisplayName
+        String agencyDisplayName,
+        /** Home (client) full name or facility name for agency/admin schedule views. */
+        String siteDisplayName
 ) {
 }

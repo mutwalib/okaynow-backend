@@ -72,7 +72,8 @@ public final class ShiftResponses {
                 raw.createdAt(),
                 raw.agencyCoverageRequested(),
                 raw.agencyId(),
-                raw.agencyDisplayName());
+                raw.agencyDisplayName(),
+                raw.siteDisplayName());
     }
 
     /** Attach agency identity without changing pay/bill visibility rules. */
@@ -115,7 +116,48 @@ public final class ShiftResponses {
                 raw.createdAt(),
                 raw.agencyCoverageRequested(),
                 agencyId,
-                agencyDisplayName);
+                agencyDisplayName,
+                raw.siteDisplayName());
+    }
+
+    public static ShiftResponse withSiteDisplayName(ShiftResponse raw, String siteDisplayName) {
+        if (raw == null) {
+            return null;
+        }
+        return new ShiftResponse(
+                raw.id(),
+                raw.clientProfileId(),
+                raw.facilityProfileId(),
+                raw.requiredQualification(),
+                raw.date(),
+                raw.startTime(),
+                raw.endTime(),
+                raw.addressLine(),
+                raw.city(),
+                raw.state(),
+                raw.zip(),
+                raw.lat(),
+                raw.lng(),
+                raw.payRate(),
+                raw.billRate(),
+                raw.status(),
+                raw.scheduleType(),
+                raw.seriesId(),
+                raw.notes(),
+                raw.platformPaid(),
+                raw.marketplacePosted(),
+                raw.marketplaceSlots(),
+                raw.requiredHeadcount(),
+                raw.filledSlots(),
+                raw.surgeBonusPay(),
+                raw.surgeTierApplied(),
+                raw.escalationRadiusBonusMiles(),
+                raw.createdBy(),
+                raw.createdAt(),
+                raw.agencyCoverageRequested(),
+                raw.agencyId(),
+                raw.agencyDisplayName(),
+                siteDisplayName);
     }
 
     /** Override pay rate (e.g. caregiver's agreed agency roster rate). */

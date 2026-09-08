@@ -63,6 +63,7 @@
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/agencies/repository/SubscriptionPlanDefinitionRepository.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/agencies/service/AgencyDirectoryService.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/agencies/service/AgencyHoursExportService.java
+/Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/agencies/service/AgencyOpeningNotifier.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/agencies/service/AgencyService.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/agencies/service/AgencyShiftRoutingService.java
 /Users/bob/Developer/OkayNow/backend/src/main/java/com/okaynow/agencies/service/AgencyShiftService.java

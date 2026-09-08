@@ -19,6 +19,7 @@ import com.okaynow.shifts.domain.ShiftStatus;
 import com.okaynow.shifts.dto.ShiftResponses;
 import com.okaynow.shifts.mapper.ShiftMapper;
 import com.okaynow.shifts.repository.ShiftRepository;
+import com.okaynow.shifts.service.ShiftAgencyLabelService;
 import com.okaynow.users.domain.CaregiverProfile;
 import com.okaynow.users.domain.Role;
 import com.okaynow.users.domain.User;
@@ -50,6 +51,7 @@ public class AgencyShiftService {
     private final UserRepository userRepository;
     private final AgencyShiftRoutingService agencyShiftRoutingService;
     private final ShiftClaimRepository shiftClaimRepository;
+    private final ShiftAgencyLabelService shiftAgencyLabelService;
 
     @Transactional(readOnly = true)
     public List<AgencyShiftCardResponse> listForAgency(UUID agencyUserId) {
@@ -63,7 +65,9 @@ public class AgencyShiftService {
                         .collect(Collectors.groupingBy(c -> c.getShift().getId()));
         return shifts.stream()
                 .map(shift -> new AgencyShiftCardResponse(
-                        ShiftResponses.forViewer(shiftMapper.toResponse(shift), Role.AGENCY_ADMIN),
+                        ShiftResponses.forViewer(
+                                shiftAgencyLabelService.label(shift, shiftMapper.toResponse(shift)),
+                                Role.AGENCY_ADMIN),
                         claimsByShift.getOrDefault(shift.getId(), List.of()).stream()
                                 .map(AgencyShiftService::toAssignment)
                                 .toList()))

@@ -1,11 +1,11 @@
 package com.okaynow.agencies.domain;
 
 /**
- * How accepted home/facility shift requests are routed to caregivers.
+ * How home/facility openings are claimed and routed to caregivers.
  */
 public enum ShiftRoutingMode {
-    /** Shift lands on the agency board; scheduler broadcasts or assigns manually. */
+    /** Opening waits in the agency inbox until a scheduler accepts, then broadcast/assign. */
     INBOX_FIRST,
-    /** Accepted shifts are posted to roster caregivers in the service area immediately. */
+    /** Opening is accepted and posted to area roster caregivers as soon as it is sent. */
     AUTO_BROADCAST
 }

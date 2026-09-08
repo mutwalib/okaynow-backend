@@ -56,7 +56,7 @@ public class ShiftRequestAgency {
     /** Set when agency converts this request into a tenant shift. */
     private UUID createdShiftId;
 
-    @Column(nullable = false, updatable = false)
+    @Column(updatable = false)
     private Instant createdAt;
 
     @PrePersist

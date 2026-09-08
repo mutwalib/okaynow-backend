@@ -4,6 +4,9 @@ import com.okaynow.agencies.domain.Agency;
 import com.okaynow.agencies.repository.AgencyRepository;
 import com.okaynow.agencies.support.AgencyAccessService;
 import com.okaynow.agencies.service.AgencyShiftRoutingService;
+import com.okaynow.booking.domain.ShiftClaim;
+import com.okaynow.booking.domain.ShiftClaimStatus;
+import com.okaynow.booking.repository.ShiftClaimRepository;
 import com.okaynow.common.exception.BadRequestException;
 import com.okaynow.common.exception.ConflictException;
 import com.okaynow.common.exception.ResourceNotFoundException;
@@ -11,6 +14,8 @@ import com.okaynow.common.geo.GeocodingService;
 import com.okaynow.common.geo.ServiceRegionService;
 import com.okaynow.connections.service.HomeAgencyConnectionService;
 import com.okaynow.evv.support.ShiftWindows;
+import com.okaynow.notifications.domain.NotificationType;
+import com.okaynow.notifications.service.ShiftEventPublisher;
 import com.okaynow.payroll.domain.AgencySettings;
 import com.okaynow.payroll.service.AgencySettingsService;
 import com.okaynow.shiftrequests.domain.ShiftRequest;
@@ -39,6 +44,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -62,6 +68,11 @@ public class ShiftRequestService {
     private final AgencySettingsService agencySettingsService;
     private final ShiftRepository shiftRepository;
     private final AgencyShiftRoutingService agencyShiftRoutingService;
+    private final ShiftClaimRepository shiftClaimRepository;
+    private final ShiftEventPublisher shiftEventPublisher;
+
+    private static final Set<ShiftClaimStatus> ACTIVE_CLAIM_STATUSES =
+            EnumSet.of(ShiftClaimStatus.PENDING, ShiftClaimStatus.CONFIRMED);
 
     @Transactional
     public ShiftRequestResponse createForHome(UUID homeUserId, CreateShiftRequestPayload payload) {
@@ -174,6 +185,14 @@ public class ShiftRequestService {
         int remaining = Math.max(0, shift.getRequiredHeadcount() - shift.getFilledSlots());
         int requested = slots != null ? slots : Math.max(1, remaining > 0 ? remaining : shift.getRequiredHeadcount());
         String notes = trimOrNull(reason);
+        String cancelReason = notes != null ? notes : "Caregiver call-out — replacement requested";
+
+        // Call-out on a filled day: release caregivers first, then re-route the opening.
+        if (remaining <= 0 && shift.getFilledSlots() > 0) {
+            releaseClaimsForCallOut(shift, requested, cancelReason);
+            remaining = Math.max(0, shift.getRequiredHeadcount() - shift.getFilledSlots());
+            requested = slots != null ? slots : Math.max(1, remaining > 0 ? remaining : 1);
+        }
 
         // Already owned by the selected agency — they staff directly; no inbox ping.
         if (targetAgencyId.equals(shift.getAgencyId())) {
@@ -182,31 +201,39 @@ public class ShiftRequestService {
             return;
         }
 
-        // Must explicitly release before sending to a different agency.
+        // Unstaffed openings can be moved in one step (release + send). Staffed ones cannot.
         if (shift.getAgencyId() != null) {
-            throw new ConflictException(
-                    "This opening is already with another agency. Release it first "
-                            + "(only allowed if no caregiver has taken the shift yet).");
+            if (shift.getFilledSlots() > 0) {
+                throw new ConflictException(
+                        "This opening already has a caregiver assigned. Unassign them before sending to another agency.");
+            }
+            clearUnstaffedAgencyHandoff(shift);
         }
 
         ShiftRequest request = shiftRequestRepository
                 .findFirstBySourceShiftIdAndStatus(shift.getId(), ShiftRequestStatus.OPEN)
                 .orElse(null);
         if (request != null) {
-            List<ShiftRequestAgency> pendingTargets = shiftRequestAgencyRepository
-                    .findByShiftRequestId(request.getId())
-                    .stream()
-                    .filter(t -> t.getStatus() == ShiftRequestAgencyStatus.PENDING)
-                    .toList();
-            boolean alreadyPendingForTarget = pendingTargets.stream()
-                    .anyMatch(t -> t.getAgency().getId().equals(targetAgencyId));
+            List<ShiftRequestAgency> targets =
+                    shiftRequestAgencyRepository.findByShiftRequestId(request.getId());
+            boolean alreadyPendingForTarget = targets.stream()
+                    .anyMatch(t -> t.getStatus() == ShiftRequestAgencyStatus.PENDING
+                            && t.getAgency().getId().equals(targetAgencyId));
             if (alreadyPendingForTarget) {
-                throw new BadRequestException("Already sent to the selected agency");
+                shift.setAgencyCoverageRequested(true);
+                shiftRepository.save(shift);
+                return;
             }
-            if (!pendingTargets.isEmpty()) {
-                throw new ConflictException(
-                        "This opening was already sent to another agency. Release it first "
-                                + "before sending it to a different agency.");
+            boolean otherPending = targets.stream()
+                    .anyMatch(t -> t.getStatus() == ShiftRequestAgencyStatus.PENDING
+                            && !t.getAgency().getId().equals(targetAgencyId));
+            if (otherPending) {
+                if (shift.getFilledSlots() > 0) {
+                    throw new ConflictException(
+                            "This opening was already sent to another agency and is staffed. "
+                                    + "Unassign the caregiver, then release before sending elsewhere.");
+                }
+                // Unstaffed: decline other pending targets, then attach the new agency below.
             }
             request.setRequiredHeadcount(Math.max(1, requested));
             if (notes != null) {
@@ -216,6 +243,7 @@ public class ShiftRequestService {
             replaceExclusiveTarget(request, actor.getId(), targetAgencyId);
         } else {
             var region = serviceRegionService.validate(shift.getState(), shift.getZip());
+            Instant now = Instant.now();
             request = shiftRequestRepository.save(ShiftRequest.builder()
                     .homeUser(actor)
                     .facilityProfile(facility)
@@ -232,10 +260,96 @@ public class ShiftRequestService {
                     .notes(notes)
                     .requiredHeadcount(Math.max(1, requested))
                     .status(ShiftRequestStatus.OPEN)
+                    .createdAt(now)
                     .build());
             replaceExclusiveTarget(request, actor.getId(), targetAgencyId);
         }
         shift.setAgencyCoverageRequested(true);
+        shiftRepository.save(shift);
+    }
+
+    /**
+     * Drop agency ownership / open coverage requests when nobody has taken the shift yet.
+     */
+    private void clearUnstaffedAgencyHandoff(Shift shift) {
+        Instant now = Instant.now();
+        shiftRequestRepository.findFirstBySourceShiftIdAndStatus(shift.getId(), ShiftRequestStatus.OPEN)
+                .ifPresent(request -> cancelCoverageRequest(request, now));
+        if (shift.getShiftRequestId() != null) {
+            shiftRequestRepository.findById(shift.getShiftRequestId()).ifPresent(request -> {
+                if (request.getStatus() == ShiftRequestStatus.FULFILLED
+                        || request.getStatus() == ShiftRequestStatus.OPEN) {
+                    cancelCoverageRequest(request, now);
+                }
+            });
+        }
+        shift.setAgencyId(null);
+        shift.setShiftRequestId(null);
+        shift.setAgencyCoverageRequested(false);
+    }
+
+    private void cancelCoverageRequest(ShiftRequest request, Instant now) {
+        for (ShiftRequestAgency row : shiftRequestAgencyRepository.findByShiftRequestId(request.getId())) {
+            if (row.getStatus() == ShiftRequestAgencyStatus.PENDING
+                    || row.getStatus() == ShiftRequestAgencyStatus.ACCEPTED) {
+                row.setStatus(ShiftRequestAgencyStatus.DECLINED);
+                row.setRespondedAt(now);
+                shiftRequestAgencyRepository.save(row);
+            }
+        }
+        request.setStatus(ShiftRequestStatus.CANCELLED);
+        shiftRequestRepository.save(request);
+    }
+
+    /** Release active claims so a facility call-out can re-route the opening to an agency. */
+    private void releaseClaimsForCallOut(Shift shift, int count, String cancelReason) {
+        List<ShiftClaim> active = shiftClaimRepository.findByShiftIdOrderByClaimedAtDesc(shift.getId())
+                .stream()
+                .filter(c -> ACTIVE_CLAIM_STATUSES.contains(c.getStatus()))
+                .sorted((a, b) -> {
+                    boolean aPending = a.getStatus() == ShiftClaimStatus.PENDING;
+                    boolean bPending = b.getStatus() == ShiftClaimStatus.PENDING;
+                    if (aPending != bPending) {
+                        return aPending ? -1 : 1;
+                    }
+                    return b.getClaimedAt().compareTo(a.getClaimedAt());
+                })
+                .toList();
+        if (active.isEmpty()) {
+            shift.setFilledSlots(0);
+            return;
+        }
+        int releaseCount = Math.min(Math.max(1, count), active.size());
+        Instant now = Instant.now();
+        for (ShiftClaim claim : active.stream().limit(releaseCount).toList()) {
+            claim.setStatus(ShiftClaimStatus.CANCELLED);
+            claim.setReleasedAt(now);
+            claim.setCancelReason(cancelReason);
+            shiftClaimRepository.save(claim);
+            UUID caregiverUserId = claim.getCaregiverProfile().getUser() != null
+                    ? claim.getCaregiverProfile().getUser().getId()
+                    : null;
+            if (caregiverUserId != null) {
+                shiftEventPublisher.publish(
+                        NotificationType.SHIFT_RELEASED,
+                        shift,
+                        caregiverUserId,
+                        "Shift coverage released",
+                        "You were released from the " + shift.getDate()
+                                + " shift: " + cancelReason);
+            }
+        }
+        long stillFilled = shiftClaimRepository.findByShiftIdOrderByClaimedAtDesc(shift.getId())
+                .stream()
+                .filter(c -> ACTIVE_CLAIM_STATUSES.contains(c.getStatus()))
+                .count();
+        shift.setFilledSlots((int) stillFilled);
+        if (stillFilled == 0
+                && shift.getStatus() != ShiftStatus.DRAFT
+                && shift.getStatus() != ShiftStatus.CANCELLED
+                && shift.getStatus() != ShiftStatus.COMPLETED) {
+            shift.setStatus(ShiftStatus.DRAFT);
+        }
         shiftRepository.save(shift);
     }
 
@@ -274,42 +388,7 @@ public class ShiftRequestService {
             throw new ConflictException("Cannot release a " + shift.getStatus() + " shift");
         }
 
-        Instant now = Instant.now();
-        shiftRequestRepository.findFirstBySourceShiftIdAndStatus(shift.getId(), ShiftRequestStatus.OPEN)
-                .ifPresent(request -> {
-                    for (ShiftRequestAgency row : shiftRequestAgencyRepository.findByShiftRequestId(request.getId())) {
-                        if (row.getStatus() == ShiftRequestAgencyStatus.PENDING
-                                || row.getStatus() == ShiftRequestAgencyStatus.ACCEPTED) {
-                            row.setStatus(ShiftRequestAgencyStatus.DECLINED);
-                            row.setRespondedAt(now);
-                            shiftRequestAgencyRepository.save(row);
-                        }
-                    }
-                    request.setStatus(ShiftRequestStatus.CANCELLED);
-                    shiftRequestRepository.save(request);
-                });
-        // Also close a fulfilled request tied to this shift when releasing after accept.
-        if (shift.getShiftRequestId() != null) {
-            shiftRequestRepository.findById(shift.getShiftRequestId()).ifPresent(request -> {
-                if (request.getStatus() == ShiftRequestStatus.FULFILLED
-                        || request.getStatus() == ShiftRequestStatus.OPEN) {
-                    for (ShiftRequestAgency row : shiftRequestAgencyRepository.findByShiftRequestId(request.getId())) {
-                        if (row.getStatus() == ShiftRequestAgencyStatus.PENDING
-                                || row.getStatus() == ShiftRequestAgencyStatus.ACCEPTED) {
-                            row.setStatus(ShiftRequestAgencyStatus.DECLINED);
-                            row.setRespondedAt(now);
-                            shiftRequestAgencyRepository.save(row);
-                        }
-                    }
-                    request.setStatus(ShiftRequestStatus.CANCELLED);
-                    shiftRequestRepository.save(request);
-                }
-            });
-        }
-
-        shift.setAgencyId(null);
-        shift.setShiftRequestId(null);
-        shift.setAgencyCoverageRequested(false);
+        clearUnstaffedAgencyHandoff(shift);
         return shiftRepository.save(shift);
     }
 
@@ -555,6 +634,7 @@ public class ShiftRequestService {
                     .shiftRequest(request)
                     .agency(agency)
                     .status(ShiftRequestAgencyStatus.PENDING)
+                    .createdAt(Instant.now())
                     .build());
         }
     }
@@ -587,8 +667,12 @@ public class ShiftRequestService {
             if (selected.getStatus() == ShiftRequestAgencyStatus.DECLINED) {
                 selected.setStatus(ShiftRequestAgencyStatus.PENDING);
                 selected.setRespondedAt(null);
+                if (selected.getCreatedAt() == null) {
+                    selected.setCreatedAt(now);
+                }
                 shiftRequestAgencyRepository.save(selected);
             }
+            // PENDING (or just reopened): already the exclusive target.
             return;
         }
         Agency agency = agencyRepository.findById(agencyId)
@@ -597,6 +681,7 @@ public class ShiftRequestService {
                 .shiftRequest(request)
                 .agency(agency)
                 .status(ShiftRequestAgencyStatus.PENDING)
+                .createdAt(now)
                 .build());
     }
 

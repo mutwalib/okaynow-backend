@@ -177,4 +177,24 @@ public interface ShiftRepository extends JpaRepository<Shift, UUID>, JpaSpecific
     List<Shift> findOpenRosterBroadcastForAgencies(
             @Param("agencyIds") java.util.Collection<UUID> agencyIds,
             @Param("fromDate") LocalDate fromDate);
+
+    /**
+     * Facility/home-created openings that inherited an agencyId from a series template
+     * without a real coverage accept (no shiftRequestId).
+     */
+    @Query("""
+            select s from Shift s
+            where s.createdBy = :createdBy
+              and s.agencyId is not null
+              and s.shiftRequestId is null
+              and s.agencyCoverageRequested = false
+              and s.filledSlots = 0
+              and s.status in (
+                com.okaynow.shifts.domain.ShiftStatus.DRAFT,
+                com.okaynow.shifts.domain.ShiftStatus.OPEN,
+                com.okaynow.shifts.domain.ShiftStatus.HELD,
+                com.okaynow.shifts.domain.ShiftStatus.CLAIMED
+              )
+            """)
+    List<Shift> findInheritedAgencyOwnership(@Param("createdBy") UUID createdBy);
 }

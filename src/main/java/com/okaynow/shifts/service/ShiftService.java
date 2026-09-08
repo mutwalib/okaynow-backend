@@ -63,6 +63,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -525,6 +526,9 @@ public class ShiftService {
         } else {
             return;
         }
+
+        clearInheritedAgencyOwnership(actor);
+
         if (seriesIds.isEmpty()) {
             return;
         }
@@ -540,6 +544,18 @@ public class ShiftService {
             for (LocalDate d = rangeStart; !d.isAfter(rangeEnd); d = d.plusDays(1)) {
                 if (shiftRepository.existsBySeriesIdAndDate(seriesId, d)) {
                     continue;
+                }
+                // Facility/home-created series stay unassigned until coverage is sent.
+                // Agency-created series keep agencyId even when the facility calendar expands them.
+                UUID expandedAgencyId;
+                if (actor.getRole() == Role.AGENCY_ADMIN) {
+                    expandedAgencyId = template.getAgencyId();
+                } else if (actor.getRole() == Role.FACILITY || actor.getRole() == Role.CLIENT) {
+                    expandedAgencyId = Objects.equals(template.getCreatedBy(), actor.getId())
+                            ? null
+                            : template.getAgencyId();
+                } else {
+                    expandedAgencyId = template.getAgencyId();
                 }
                 Shift draft = Shift.builder()
                         .clientProfileId(template.getClientProfileId())
@@ -564,7 +580,8 @@ public class ShiftService {
                         .requiredHeadcount(Math.max(1, template.getRequiredHeadcount()))
                         .filledSlots(0)
                         .createdBy(template.getCreatedBy())
-                        .agencyId(template.getAgencyId())
+                        .agencyId(expandedAgencyId)
+                        .agencyCoverageRequested(false)
                         .build();
                 if (hasOwnerTimeOverlap(draft, null, seriesId)) {
                     // Another shift already occupies this window — skip this day.
@@ -580,6 +597,27 @@ public class ShiftService {
                 assignRosterCaregivers(created, template.getClientProfileId(), actor);
             }
         }
+    }
+
+    /**
+     * Daily-routine expansion used to copy agencyId onto every new day after one day
+     * was accepted. Clear those inherited stamps for facility/home-created openings
+     * that were never actually handed off (no shiftRequestId, nobody staffed).
+     */
+    private void clearInheritedAgencyOwnership(User actor) {
+        if (actor.getRole() != Role.FACILITY && actor.getRole() != Role.CLIENT) {
+            return;
+        }
+        List<Shift> inherited = shiftRepository.findInheritedAgencyOwnership(actor.getId());
+        if (inherited.isEmpty()) {
+            return;
+        }
+        for (Shift shift : inherited) {
+            shift.setAgencyId(null);
+            shift.setAgencyCoverageRequested(false);
+            shift.setShiftRequestId(null);
+        }
+        shiftRepository.saveAll(inherited);
     }
 
     @Transactional(readOnly = true)

@@ -1,7 +1,5 @@
 package com.okaynow.shifts.dto;
 
-import com.okaynow.booking.domain.ClaimSource;
-import com.okaynow.booking.domain.ShiftClaimStatus;
 import com.okaynow.shifts.domain.ShiftScheduleType;
 import com.okaynow.shifts.domain.ShiftStatus;
 import com.okaynow.users.domain.Qualification;
@@ -29,15 +27,17 @@ public record ScheduleShiftCardResponse(
         boolean needsCoverage,
         String notes,
         List<ScheduleRosterSlotResponse> roster,
-        /** True when the viewing agency created this shift (agency calendar only). */
+        /**
+         * Agency calendar only: true = this agency owns the shift;
+         * false = another agency's coverage (opaque); null = home/facility calendar.
+         */
         Boolean agencyManaged,
         /** Facility opening was sent to connected agencies. */
-        Boolean agencyCoverageRequested
+        Boolean agencyCoverageRequested,
+        /** Staffing agency name when assigned, or pending target when coverage was requested. */
+        String agencyDisplayName
 ) {
     public ScheduleShiftCardResponse {
-        if (agencyManaged == null) {
-            agencyManaged = false;
-        }
         if (agencyCoverageRequested == null) {
             agencyCoverageRequested = false;
         }

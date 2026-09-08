@@ -34,4 +34,15 @@ public interface ShiftRequestAgencyRepository extends JpaRepository<ShiftRequest
 
     List<ShiftRequestAgency> findByAgencyIdAndStatusOrderByShiftRequest_CreatedAtDesc(
             UUID agencyId, ShiftRequestAgencyStatus status);
+
+    @Query("""
+            SELECT sra FROM ShiftRequestAgency sra
+            JOIN FETCH sra.agency
+            JOIN FETCH sra.shiftRequest sr
+            WHERE sr.sourceShiftId IN :shiftIds
+              AND sr.status = com.okaynow.shiftrequests.domain.ShiftRequestStatus.OPEN
+              AND sra.status = com.okaynow.shiftrequests.domain.ShiftRequestAgencyStatus.PENDING
+            """)
+    List<ShiftRequestAgency> findPendingCoverageForSourceShifts(
+            @Param("shiftIds") java.util.Collection<UUID> shiftIds);
 }

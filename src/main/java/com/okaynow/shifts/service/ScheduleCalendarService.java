@@ -10,6 +10,8 @@ import com.okaynow.common.exception.ResourceNotFoundException;
 import com.okaynow.connections.service.HomeAgencyConnectionService;
 import com.okaynow.roster.domain.AgencyCaregiverStatus;
 import com.okaynow.roster.repository.AgencyCaregiverRepository;
+import com.okaynow.shiftrequests.domain.ShiftRequestAgency;
+import com.okaynow.shiftrequests.repository.ShiftRequestAgencyRepository;
 import com.okaynow.shifts.domain.Shift;
 import com.okaynow.shifts.domain.ShiftStatus;
 import com.okaynow.shifts.dto.ScheduleDayResponse;
@@ -35,9 +37,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -63,6 +67,8 @@ public class ScheduleCalendarService {
     private final AgencyAccessService agencyAccessService;
     private final HomeAgencyConnectionService homeAgencyConnectionService;
     private final AgencyCaregiverRepository agencyCaregiverRepository;
+    private final ShiftAgencyLabelService shiftAgencyLabelService;
+    private final ShiftRequestAgencyRepository shiftRequestAgencyRepository;
 
     @Transactional
     public List<ScheduleDayResponse> calendar(
@@ -103,7 +109,6 @@ public class ScheduleCalendarService {
             throw new AccessDeniedException("Schedule calendar is for clients, facilities, and admins");
         }
 
-        // Roll open-ended daily routines forward (no end date) and fill from roster.
         shiftService.ensureOpenEndedCoverage(
                 from, to, clientProfileId, facilityProfileId, actor);
 
@@ -138,6 +143,10 @@ public class ScheduleCalendarService {
             }
         }
 
+        Map<UUID, String> agencyNames = shiftAgencyLabelService.namesFor(
+                shifts.stream().map(Shift::getAgencyId).filter(Objects::nonNull).toList());
+        Map<UUID, String> pendingAgencyByShift = pendingAgencyLabels(shifts);
+
         Map<LocalDate, List<ScheduleShiftCardResponse>> byDay = new LinkedHashMap<>();
         for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
             byDay.put(d, new ArrayList<>());
@@ -148,7 +157,6 @@ public class ScheduleCalendarService {
             int required = Math.max(1, shift.getRequiredHeadcount());
             int filled = shift.getFilledSlots();
             int open = Math.max(0, required - filled);
-            // Coverage is opt-in: client/admin must click to open the marketplace.
             boolean needsCoverage = shift.isMarketplacePosted()
                     && shift.getMarketplaceSlots() > 0
                     && !TERMINAL.contains(shift.getStatus());
@@ -160,6 +168,14 @@ public class ScheduleCalendarService {
             List<ScheduleRosterSlotResponse> roster = claims.stream()
                     .map(this::toVisibleRosterSlot)
                     .toList();
+
+            String agencyLabel = null;
+            if (shift.getAgencyId() != null) {
+                agencyLabel = agencyNames.getOrDefault(shift.getAgencyId(), "Agency");
+            } else if (shift.isAgencyCoverageRequested()) {
+                String pending = pendingAgencyByShift.get(shift.getId());
+                agencyLabel = pending != null ? pending + " (pending)" : "Agency pending";
+            }
 
             ScheduleShiftCardResponse card = new ScheduleShiftCardResponse(
                     shift.getId(),
@@ -181,8 +197,9 @@ public class ScheduleCalendarService {
                     needsCoverage,
                     shift.getNotes(),
                     roster,
-                    false,
-                    shift.isAgencyCoverageRequested());
+                    null,
+                    shift.isAgencyCoverageRequested(),
+                    agencyLabel);
 
             byDay.computeIfAbsent(shift.getDate(), ignored -> new ArrayList<>()).add(card);
         }
@@ -215,8 +232,7 @@ public class ScheduleCalendarService {
             throw new BadRequestException("Calendar range cannot exceed 62 days");
         }
         if (actor.getRole() != Role.AGENCY_ADMIN) {
-            throw new org.springframework.security.access.AccessDeniedException(
-                    "Agency schedule calendar is for agency admins");
+            throw new AccessDeniedException("Agency schedule calendar is for agency admins");
         }
 
         Agency agency = agencyAccessService.requireAgencyForUser(actor.getId());
@@ -235,7 +251,6 @@ public class ScheduleCalendarService {
                 .map(entry -> entry.getCaregiverProfile().getId())
                 .collect(Collectors.toSet());
 
-        // Only expand open-ended series owned by this agency (never another tenant's routines).
         shiftService.ensureOpenEndedCoverage(from, to, clientProfileId, facilityProfileId, actor);
 
         Specification<Shift> filters = ShiftSpecifications.withFilters(
@@ -246,7 +261,6 @@ public class ScheduleCalendarService {
                 filters,
                 PageRequest.of(0, 500, Sort.by("date", "startTime"))).getContent();
 
-        // Load claims only for shifts this agency owns (never inspect other agencies' assignments).
         List<UUID> ownedShiftIds = shifts.stream()
                 .filter(s -> agency.getId().equals(s.getAgencyId()))
                 .map(Shift::getId)
@@ -258,6 +272,9 @@ public class ScheduleCalendarService {
                     .stream()
                     .collect(Collectors.groupingBy(c -> c.getShift().getId()));
         }
+
+        Map<UUID, String> agencyNames = shiftAgencyLabelService.namesFor(
+                shifts.stream().map(Shift::getAgencyId).filter(Objects::nonNull).toList());
 
         Map<LocalDate, List<ScheduleShiftCardResponse>> byDay = new LinkedHashMap<>();
         for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
@@ -276,6 +293,7 @@ public class ScheduleCalendarService {
             int open;
             boolean needsCoverage;
             String notes;
+            String agencyLabel = null;
 
             if (owned) {
                 List<ShiftClaim> claims = claimsByShift.getOrDefault(shift.getId(), List.of());
@@ -285,12 +303,11 @@ public class ScheduleCalendarService {
                         && shift.getMarketplaceSlots() > 0
                         && !TERMINAL.contains(shift.getStatus());
                 notes = shift.getNotes();
-                // Unmask only caregivers assigned on THIS agency's shift (not merely on roster).
                 roster = claims.stream()
                         .map(claim -> toOwnedAgencyRosterSlot(claim, agencyCaregiverIds))
                         .toList();
+                agencyLabel = agencyNames.getOrDefault(agency.getId(), agency.getDisplayName());
             } else {
-                // Another agency's coverage: time window only + opaque occupancy. No names/status/notes.
                 filled = shift.getFilledSlots() > 0 ? 1 : 0;
                 open = 0;
                 needsCoverage = false;
@@ -298,6 +315,11 @@ public class ScheduleCalendarService {
                 roster = filled > 0
                         ? List.of(ScheduleRosterSlotResponse.opaqueOccupied())
                         : List.of();
+                if (shift.getAgencyId() != null) {
+                    agencyLabel = agencyNames.getOrDefault(shift.getAgencyId(), "Other agency");
+                } else if (shift.isAgencyCoverageRequested()) {
+                    agencyLabel = "Pending with another agency";
+                }
             }
 
             ScheduleShiftCardResponse card = new ScheduleShiftCardResponse(
@@ -319,7 +341,8 @@ public class ScheduleCalendarService {
                     notes,
                     roster,
                     owned,
-                    owned && shift.isAgencyCoverageRequested());
+                    owned && shift.isAgencyCoverageRequested(),
+                    agencyLabel);
 
             byDay.computeIfAbsent(shift.getDate(), ignored -> new ArrayList<>()).add(card);
         }
@@ -327,6 +350,29 @@ public class ScheduleCalendarService {
         return byDay.entrySet().stream()
                 .map(e -> new ScheduleDayResponse(e.getKey(), e.getValue()))
                 .toList();
+    }
+
+    private Map<UUID, String> pendingAgencyLabels(List<Shift> shifts) {
+        List<UUID> pendingIds = shifts.stream()
+                .filter(s -> s.isAgencyCoverageRequested() && s.getAgencyId() == null)
+                .map(Shift::getId)
+                .toList();
+        if (pendingIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, String> out = new HashMap<>();
+        for (ShiftRequestAgency row : shiftRequestAgencyRepository.findPendingCoverageForSourceShifts(pendingIds)) {
+            UUID sourceId = row.getShiftRequest().getSourceShiftId();
+            if (sourceId == null || out.containsKey(sourceId)) {
+                continue;
+            }
+            Agency agency = row.getAgency();
+            String name = agency.getDisplayName() != null && !agency.getDisplayName().isBlank()
+                    ? agency.getDisplayName().trim()
+                    : (agency.getLegalName() != null ? agency.getLegalName().trim() : "Agency");
+            out.put(sourceId, name);
+        }
+        return out;
     }
 
     private ScheduleRosterSlotResponse toVisibleRosterSlot(ShiftClaim claim) {
@@ -341,10 +387,6 @@ public class ScheduleCalendarService {
                 caregiver.getProfilePhotoUrl());
     }
 
-    /**
-     * Roster slots on shifts owned by the viewing agency. Caregivers not on this agency's
-     * roster stay masked (marketplace/other), but never leak another agency's assignment.
-     */
     private ScheduleRosterSlotResponse toOwnedAgencyRosterSlot(
             ShiftClaim claim, Set<UUID> agencyCaregiverIds) {
         CaregiverProfile caregiver = claim.getCaregiverProfile();

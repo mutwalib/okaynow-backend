@@ -17,4 +17,7 @@ public interface ShiftRequestRepository extends JpaRepository<ShiftRequest, UUID
 
     Optional<ShiftRequest> findFirstBySourceShiftIdAndStatus(
             UUID sourceShiftId, ShiftRequestStatus status);
+
+    List<ShiftRequest> findBySourceShiftIdInAndStatus(
+            java.util.Collection<UUID> sourceShiftIds, ShiftRequestStatus status);
 }

@@ -110,6 +110,15 @@ public class ShiftController {
         return ResponseEntity.ok(bookingService.requestReplacement(id, reason, slots, actor));
     }
 
+    @PostMapping("/{id}/release-agency-coverage")
+    @PreAuthorize("hasRole('FACILITY')")
+    public ResponseEntity<ShiftResponse> releaseAgencyCoverage(
+            @PathVariable UUID id, Authentication authentication) {
+        var actor = userService.getByEmail(authentication.getName());
+        shiftRequestService.releaseAgencyCoverage(id, actor);
+        return ResponseEntity.ok(shiftService.getById(id, actor));
+    }
+
     @PostMapping("/{id}/close-marketplace")
     @PreAuthorize("hasAnyRole('CLIENT', 'FACILITY', 'ADMIN')")
     public ResponseEntity<ShiftResponse> closeMarketplace(

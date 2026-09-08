@@ -182,21 +182,32 @@ public class ShiftRequestService {
             return;
         }
 
-        // Coverage is exclusive: release another agency's ownership so they cannot staff
-        // while this opening is pending with the selected agency.
+        // Must explicitly release before sending to a different agency.
         if (shift.getAgencyId() != null) {
-            if (shift.getFilledSlots() > 0) {
-                throw new ConflictException(
-                        "Cannot send this opening to another agency while caregivers are already assigned — unassign them first");
-            }
-            shift.setAgencyId(null);
-            shift.setShiftRequestId(null);
+            throw new ConflictException(
+                    "This opening is already with another agency. Release it first "
+                            + "(only allowed if no caregiver has taken the shift yet).");
         }
 
         ShiftRequest request = shiftRequestRepository
                 .findFirstBySourceShiftIdAndStatus(shift.getId(), ShiftRequestStatus.OPEN)
                 .orElse(null);
         if (request != null) {
+            List<ShiftRequestAgency> pendingTargets = shiftRequestAgencyRepository
+                    .findByShiftRequestId(request.getId())
+                    .stream()
+                    .filter(t -> t.getStatus() == ShiftRequestAgencyStatus.PENDING)
+                    .toList();
+            boolean alreadyPendingForTarget = pendingTargets.stream()
+                    .anyMatch(t -> t.getAgency().getId().equals(targetAgencyId));
+            if (alreadyPendingForTarget) {
+                throw new BadRequestException("Already sent to the selected agency");
+            }
+            if (!pendingTargets.isEmpty()) {
+                throw new ConflictException(
+                        "This opening was already sent to another agency. Release it first "
+                                + "before sending it to a different agency.");
+            }
             request.setRequiredHeadcount(Math.max(1, requested));
             if (notes != null) {
                 request.setNotes(notes);
@@ -226,6 +237,80 @@ public class ShiftRequestService {
         }
         shift.setAgencyCoverageRequested(true);
         shiftRepository.save(shift);
+    }
+
+    /**
+     * Facility withdraws an opening from the agency it was sent to / accepted by.
+     * Only allowed when no caregiver has taken the shift yet.
+     */
+    @Transactional
+    public Shift releaseAgencyCoverage(UUID shiftId, User actor) {
+        if (actor.getRole() != Role.FACILITY) {
+            throw new BadRequestException("Only facilities can release agency coverage");
+        }
+        FacilityProfile facility = facilityProfileRepository.findByUserId(actor.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Facility profile not found"));
+        Shift shift = shiftRepository.findByIdForUpdate(shiftId)
+                .orElseThrow(() -> new ResourceNotFoundException("Shift not found"));
+        boolean owns = shift.getFacilityProfileId() != null
+                && shift.getFacilityProfileId().equals(facility.getId());
+        boolean legacy = shift.getFacilityProfileId() == null
+                && shift.getClientProfileId() == null
+                && actor.getId().equals(shift.getCreatedBy());
+        if (!owns && !legacy) {
+            throw new AccessDeniedException("Not your shift");
+        }
+        if (!shift.isAgencyCoverageRequested() && shift.getAgencyId() == null) {
+            throw new BadRequestException("This opening is not currently with an agency");
+        }
+        if (shift.getFilledSlots() > 0) {
+            throw new ConflictException(
+                    "Cannot release this opening — a caregiver has already taken it. Unassign the caregiver first.");
+        }
+        if (shift.getStatus() == ShiftStatus.IN_PROGRESS
+                || shift.getStatus() == ShiftStatus.COMPLETED
+                || shift.getStatus() == ShiftStatus.CANCELLED
+                || shift.getStatus() == ShiftStatus.NO_SHOW) {
+            throw new ConflictException("Cannot release a " + shift.getStatus() + " shift");
+        }
+
+        Instant now = Instant.now();
+        shiftRequestRepository.findFirstBySourceShiftIdAndStatus(shift.getId(), ShiftRequestStatus.OPEN)
+                .ifPresent(request -> {
+                    for (ShiftRequestAgency row : shiftRequestAgencyRepository.findByShiftRequestId(request.getId())) {
+                        if (row.getStatus() == ShiftRequestAgencyStatus.PENDING
+                                || row.getStatus() == ShiftRequestAgencyStatus.ACCEPTED) {
+                            row.setStatus(ShiftRequestAgencyStatus.DECLINED);
+                            row.setRespondedAt(now);
+                            shiftRequestAgencyRepository.save(row);
+                        }
+                    }
+                    request.setStatus(ShiftRequestStatus.CANCELLED);
+                    shiftRequestRepository.save(request);
+                });
+        // Also close a fulfilled request tied to this shift when releasing after accept.
+        if (shift.getShiftRequestId() != null) {
+            shiftRequestRepository.findById(shift.getShiftRequestId()).ifPresent(request -> {
+                if (request.getStatus() == ShiftRequestStatus.FULFILLED
+                        || request.getStatus() == ShiftRequestStatus.OPEN) {
+                    for (ShiftRequestAgency row : shiftRequestAgencyRepository.findByShiftRequestId(request.getId())) {
+                        if (row.getStatus() == ShiftRequestAgencyStatus.PENDING
+                                || row.getStatus() == ShiftRequestAgencyStatus.ACCEPTED) {
+                            row.setStatus(ShiftRequestAgencyStatus.DECLINED);
+                            row.setRespondedAt(now);
+                            shiftRequestAgencyRepository.save(row);
+                        }
+                    }
+                    request.setStatus(ShiftRequestStatus.CANCELLED);
+                    shiftRequestRepository.save(request);
+                }
+            });
+        }
+
+        shift.setAgencyId(null);
+        shift.setShiftRequestId(null);
+        shift.setAgencyCoverageRequested(false);
+        return shiftRepository.save(shift);
     }
 
     @Transactional(readOnly = true)
@@ -335,14 +420,9 @@ public class ShiftRequestService {
             Shift source = shiftRepository.findByIdForUpdate(request.getSourceShiftId())
                     .orElseThrow(() -> new ResourceNotFoundException("Source shift not found"));
             if (source.getAgencyId() != null && !source.getAgencyId().equals(agency.getId())) {
-                // Stale ownership from before exclusive routing, or facility re-sent coverage
-                // without clearing the prior tenant. Take over only if nobody is staffed yet.
-                if (source.getFilledSlots() > 0) {
-                    throw new ConflictException(
-                            "Another agency already staffed this opening — ask the facility to unassign first");
-                }
-                source.setAgencyId(null);
-                source.setShiftRequestId(null);
+                throw new ConflictException(
+                        "Another agency still holds this opening. The facility must release it first "
+                                + "(only if no caregiver has taken it yet).");
             }
             source.setAgencyId(agency.getId());
             source.setShiftRequestId(request.getId());

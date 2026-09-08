@@ -23,7 +23,8 @@ public interface AgencyRepository extends JpaRepository<Agency, UUID> {
               AND a.accessStatus = com.okaynow.agencies.domain.AgencyAccessStatus.ACTIVE
               AND a.subscriptionStatus IN (
                 com.okaynow.agencies.domain.SubscriptionStatus.ACTIVE,
-                com.okaynow.agencies.domain.SubscriptionStatus.TRIAL)
+                com.okaynow.agencies.domain.SubscriptionStatus.TRIAL,
+                com.okaynow.agencies.domain.SubscriptionStatus.PAST_DUE)
             ORDER BY a.displayName ASC
             """)
     List<Agency> findDirectoryListed();

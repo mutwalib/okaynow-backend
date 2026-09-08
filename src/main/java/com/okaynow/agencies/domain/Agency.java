@@ -169,6 +169,7 @@ public class Agency {
         return accessIsActive()
                 && directoryListed
                 && (subscriptionStatus == SubscriptionStatus.ACTIVE
-                || subscriptionStatus == SubscriptionStatus.TRIAL);
+                || subscriptionStatus == SubscriptionStatus.TRIAL
+                || subscriptionStatus == SubscriptionStatus.PAST_DUE);
     }
 }

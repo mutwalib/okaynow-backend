@@ -170,9 +170,28 @@ public class ShiftRequestService {
         }
 
         Set<UUID> uniqueAgencyIds = uniqueAgencyIds(agencyIds);
+        UUID targetAgencyId = uniqueAgencyIds.iterator().next();
         int remaining = Math.max(0, shift.getRequiredHeadcount() - shift.getFilledSlots());
         int requested = slots != null ? slots : Math.max(1, remaining > 0 ? remaining : shift.getRequiredHeadcount());
         String notes = trimOrNull(reason);
+
+        // Already owned by the selected agency — they staff directly; no inbox ping.
+        if (targetAgencyId.equals(shift.getAgencyId())) {
+            shift.setAgencyCoverageRequested(false);
+            shiftRepository.save(shift);
+            return;
+        }
+
+        // Coverage is exclusive: release another agency's ownership so they cannot staff
+        // while this opening is pending with the selected agency.
+        if (shift.getAgencyId() != null) {
+            if (shift.getFilledSlots() > 0) {
+                throw new ConflictException(
+                        "Cannot send this opening to another agency while caregivers are already assigned — unassign them first");
+            }
+            shift.setAgencyId(null);
+            shift.setShiftRequestId(null);
+        }
 
         ShiftRequest request = shiftRequestRepository
                 .findFirstBySourceShiftIdAndStatus(shift.getId(), ShiftRequestStatus.OPEN)
@@ -183,7 +202,7 @@ public class ShiftRequestService {
                 request.setNotes(notes);
             }
             shiftRequestRepository.save(request);
-            attachTargets(request, actor.getId(), uniqueAgencyIds, false);
+            replaceExclusiveTarget(request, actor.getId(), targetAgencyId);
         } else {
             var region = serviceRegionService.validate(shift.getState(), shift.getZip());
             request = shiftRequestRepository.save(ShiftRequest.builder()
@@ -203,7 +222,7 @@ public class ShiftRequestService {
                     .requiredHeadcount(Math.max(1, requested))
                     .status(ShiftRequestStatus.OPEN)
                     .build());
-            attachTargets(request, actor.getId(), uniqueAgencyIds, true);
+            replaceExclusiveTarget(request, actor.getId(), targetAgencyId);
         }
         shift.setAgencyCoverageRequested(true);
         shiftRepository.save(shift);
@@ -228,12 +247,69 @@ public class ShiftRequestService {
         return toResponse(request, shiftRequestAgencyRepository.findByShiftRequestId(requestId));
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<AgencyShiftRequestInboxResponse> inboxForAgency(UUID agencyUserId) {
         Agency agency = agencyAccessService.requireAgencyForUser(agencyUserId);
-        return shiftRequestAgencyRepository.findInboxForAgency(agency.getId()).stream()
+        // Declined / superseded targets must not appear — coverage is exclusive per opening.
+        return shiftRequestAgencyRepository.findInboxForAgency(
+                        agency.getId(),
+                        List.of(ShiftRequestAgencyStatus.PENDING, ShiftRequestAgencyStatus.ACCEPTED))
+                .stream()
+                .filter(row -> keepInboxRow(row, agency.getId()))
                 .map(this::toInboxResponse)
                 .toList();
+    }
+
+    /**
+     * Drop stale PENDING rows that should never have stayed visible (another agency already
+     * owns the opening, the care need is no longer open, or a newer exclusive target replaced this one).
+     */
+    private boolean keepInboxRow(ShiftRequestAgency row, UUID agencyId) {
+        if (row.getStatus() != ShiftRequestAgencyStatus.PENDING) {
+            return true;
+        }
+        ShiftRequest request = row.getShiftRequest();
+        if (request.getStatus() != ShiftRequestStatus.OPEN) {
+            declineStale(row);
+            return false;
+        }
+        if (request.getSourceShiftId() != null) {
+            Shift source = shiftRepository.findById(request.getSourceShiftId()).orElse(null);
+            if (source != null) {
+                UUID owner = source.getAgencyId();
+                if (owner != null && !owner.equals(agencyId)) {
+                    declineStale(row);
+                    return false;
+                }
+            }
+        }
+        List<ShiftRequestAgency> pendingTargets = shiftRequestAgencyRepository
+                .findByShiftRequestId(request.getId())
+                .stream()
+                .filter(t -> t.getStatus() == ShiftRequestAgencyStatus.PENDING)
+                .toList();
+        if (pendingTargets.size() > 1) {
+            ShiftRequestAgency newest = pendingTargets.stream()
+                    .max(java.util.Comparator.comparing(
+                            t -> t.getCreatedAt() != null ? t.getCreatedAt() : Instant.EPOCH))
+                    .orElse(row);
+            if (!newest.getId().equals(row.getId())) {
+                declineStale(row);
+                return false;
+            }
+            for (ShiftRequestAgency other : pendingTargets) {
+                if (!other.getId().equals(newest.getId())) {
+                    declineStale(other);
+                }
+            }
+        }
+        return true;
+    }
+
+    private void declineStale(ShiftRequestAgency row) {
+        row.setStatus(ShiftRequestAgencyStatus.DECLINED);
+        row.setRespondedAt(Instant.now());
+        shiftRequestAgencyRepository.save(row);
     }
 
     @Transactional
@@ -259,10 +335,18 @@ public class ShiftRequestService {
             Shift source = shiftRepository.findByIdForUpdate(request.getSourceShiftId())
                     .orElseThrow(() -> new ResourceNotFoundException("Source shift not found"));
             if (source.getAgencyId() != null && !source.getAgencyId().equals(agency.getId())) {
-                throw new ConflictException("Another agency already accepted this opening");
+                // Stale ownership from before exclusive routing, or facility re-sent coverage
+                // without clearing the prior tenant. Take over only if nobody is staffed yet.
+                if (source.getFilledSlots() > 0) {
+                    throw new ConflictException(
+                            "Another agency already staffed this opening — ask the facility to unassign first");
+                }
+                source.setAgencyId(null);
+                source.setShiftRequestId(null);
             }
             source.setAgencyId(agency.getId());
             source.setShiftRequestId(request.getId());
+            source.setAgencyCoverageRequested(false);
             source.setPayRate(payRate);
             source.setBillRate(billRate);
             savedShift = shiftRepository.save(source);
@@ -393,6 +477,47 @@ public class ShiftRequestService {
                     .status(ShiftRequestAgencyStatus.PENDING)
                     .build());
         }
+    }
+
+    /**
+     * Facility coverage is exclusive: only {@code agencyId} stays PENDING.
+     * Any other PENDING targets are declined so they leave other agencies' inboxes.
+     */
+    private void replaceExclusiveTarget(ShiftRequest request, UUID requesterUserId, UUID agencyId) {
+        if (!connectionService.hasActiveConnection(requesterUserId, agencyId)) {
+            throw new BadRequestException("You must be connected to the selected agency");
+        }
+        Instant now = Instant.now();
+        ShiftRequestAgency selected = null;
+        for (ShiftRequestAgency row : shiftRequestAgencyRepository.findByShiftRequestId(request.getId())) {
+            if (row.getAgency().getId().equals(agencyId)) {
+                selected = row;
+                continue;
+            }
+            if (row.getStatus() == ShiftRequestAgencyStatus.PENDING) {
+                row.setStatus(ShiftRequestAgencyStatus.DECLINED);
+                row.setRespondedAt(now);
+                shiftRequestAgencyRepository.save(row);
+            }
+        }
+        if (selected != null) {
+            if (selected.getStatus() == ShiftRequestAgencyStatus.ACCEPTED) {
+                throw new BadRequestException("Already sent to the selected agency");
+            }
+            if (selected.getStatus() == ShiftRequestAgencyStatus.DECLINED) {
+                selected.setStatus(ShiftRequestAgencyStatus.PENDING);
+                selected.setRespondedAt(null);
+                shiftRequestAgencyRepository.save(selected);
+            }
+            return;
+        }
+        Agency agency = agencyRepository.findById(agencyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Agency not found"));
+        shiftRequestAgencyRepository.save(ShiftRequestAgency.builder()
+                .shiftRequest(request)
+                .agency(agency)
+                .status(ShiftRequestAgencyStatus.PENDING)
+                .build());
     }
 
     private ShiftRequestResponse toResponse(ShiftRequest request, List<ShiftRequestAgency> targets) {

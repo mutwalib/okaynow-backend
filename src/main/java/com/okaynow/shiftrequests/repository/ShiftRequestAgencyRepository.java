@@ -25,9 +25,12 @@ public interface ShiftRequestAgencyRepository extends JpaRepository<ShiftRequest
             LEFT JOIN FETCH sr.clientProfile
             LEFT JOIN FETCH sr.facilityProfile
             WHERE sra.agency.id = :agencyId
+              AND sra.status IN :statuses
             ORDER BY sr.createdAt DESC
             """)
-    List<ShiftRequestAgency> findInboxForAgency(@Param("agencyId") UUID agencyId);
+    List<ShiftRequestAgency> findInboxForAgency(
+            @Param("agencyId") UUID agencyId,
+            @Param("statuses") List<ShiftRequestAgencyStatus> statuses);
 
     List<ShiftRequestAgency> findByAgencyIdAndStatusOrderByShiftRequest_CreatedAtDesc(
             UUID agencyId, ShiftRequestAgencyStatus status);

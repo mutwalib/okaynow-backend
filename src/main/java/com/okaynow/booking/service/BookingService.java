@@ -1415,8 +1415,13 @@ public class BookingService {
         for (ShiftClaim existing : shiftClaimRepository.findActiveClaimsExcludingShift(
                 caregiverProfileId, candidate.getId(), ACTIVE_CLAIM_STATUSES)) {
             if (ShiftWindows.overlaps(candidate, existing.getShift())) {
-                throw new ConflictException(
-                        "Caregiver already has an active claim overlapping this shift's time window");
+                Shift other = existing.getShift();
+                boolean crossAgency = candidate.getAgencyId() != null
+                        && other.getAgencyId() != null
+                        && !candidate.getAgencyId().equals(other.getAgencyId());
+                throw new ConflictException(crossAgency
+                        ? "Caregiver is unavailable in this time window"
+                        : "Caregiver already has an active claim overlapping this shift's time window");
             }
         }
     }

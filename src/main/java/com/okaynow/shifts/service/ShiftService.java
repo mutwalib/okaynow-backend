@@ -510,11 +510,13 @@ public class ShiftService {
             if (clientProfileId != null) {
                 homeAgencyConnectionService.assertActiveConnectionForClientProfile(
                         agencyId, clientProfileId);
-                seriesIds = shiftRepository.findOpenEndedSeriesIds(clientProfileId, null);
+                seriesIds = shiftRepository.findOpenEndedSeriesIdsForAgency(
+                        agencyId, clientProfileId, null);
             } else if (facilityProfileId != null) {
                 homeAgencyConnectionService.assertActiveConnectionForFacilityProfile(
                         agencyId, facilityProfileId);
-                seriesIds = shiftRepository.findOpenEndedSeriesIds(null, facilityProfileId);
+                seriesIds = shiftRepository.findOpenEndedSeriesIdsForAgency(
+                        agencyId, null, facilityProfileId);
             } else {
                 return;
             }
@@ -1081,23 +1083,15 @@ public class ShiftService {
     }
 
     /**
-     * Agencies may view shifts they created, or any shift on a connected home/facility schedule.
+     * Agencies may only open shift detail for schedules they own.
+     * Other agencies' coverage on a shared home appears as opaque calendar blocks only.
      */
     private void assertAgencyCanViewShift(UUID agencyId, Shift shift) {
         if (agencyId.equals(shift.getAgencyId())) {
             return;
         }
-        if (shift.getClientProfileId() != null) {
-            homeAgencyConnectionService.assertActiveConnectionForClientProfile(
-                    agencyId, shift.getClientProfileId());
-            return;
-        }
-        if (shift.getFacilityProfileId() != null) {
-            homeAgencyConnectionService.assertActiveConnectionForFacilityProfile(
-                    agencyId, shift.getFacilityProfileId());
-            return;
-        }
-        throw new AccessDeniedException("You do not have permission to view this shift");
+        throw new AccessDeniedException(
+                "You can only view shifts your agency created for this home");
     }
 
     private ClientProfile authorizeMutation(Shift shift, User actor, Mutation mutation) {

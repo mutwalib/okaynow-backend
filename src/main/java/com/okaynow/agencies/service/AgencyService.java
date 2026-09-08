@@ -204,6 +204,12 @@ public class AgencyService {
                 agency.setSubscriptionPeriodStart(Instant.now());
                 agency.setSubscriptionPeriodEnd(Instant.now().plus(14, ChronoUnit.DAYS));
             }
+            // Approval unlocks directory visibility (agency can turn listing off later).
+            if (previous == AgencyAccessStatus.PENDING_APPROVAL
+                    || previous == AgencyAccessStatus.SUSPENDED
+                    || previous == AgencyAccessStatus.BLOCKED) {
+                agency.setDirectoryListed(true);
+            }
         }
         if (next == AgencyAccessStatus.SUSPENDED || next == AgencyAccessStatus.BLOCKED) {
             agency.setDirectoryListed(false);

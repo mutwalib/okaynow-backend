@@ -48,4 +48,18 @@ public record ScheduleRosterSlotResponse(
                 true,
                 "Occupied by other");
     }
+
+    /** Opaque occupancy for another agency's shift — no claim/status/source leakage. */
+    public static ScheduleRosterSlotResponse opaqueOccupied() {
+        return new ScheduleRosterSlotResponse(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                "Occupied by other");
+    }
 }

@@ -44,6 +44,20 @@ public interface ShiftRepository extends JpaRepository<Shift, UUID>, JpaSpecific
             where s.openEnded = true
               and s.scheduleType = com.okaynow.shifts.domain.ShiftScheduleType.DAILY_ROUTINE
               and s.seriesId is not null
+              and s.agencyId = :agencyId
+              and (:clientProfileId is null or s.clientProfileId = :clientProfileId)
+              and (:facilityProfileId is null or s.facilityProfileId = :facilityProfileId)
+            """)
+    List<UUID> findOpenEndedSeriesIdsForAgency(
+            @Param("agencyId") UUID agencyId,
+            @Param("clientProfileId") UUID clientProfileId,
+            @Param("facilityProfileId") UUID facilityProfileId);
+
+    @Query("""
+            select distinct s.seriesId from Shift s
+            where s.openEnded = true
+              and s.scheduleType = com.okaynow.shifts.domain.ShiftScheduleType.DAILY_ROUTINE
+              and s.seriesId is not null
               and (
                 s.facilityProfileId = :facilityProfileId
                 or (s.facilityProfileId is null and s.clientProfileId is null and s.createdBy = :facilityUserId)

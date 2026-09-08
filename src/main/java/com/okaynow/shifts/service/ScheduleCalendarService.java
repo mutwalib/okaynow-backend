@@ -235,6 +235,7 @@ public class ScheduleCalendarService {
                 .map(entry -> entry.getCaregiverProfile().getId())
                 .collect(Collectors.toSet());
 
+        // Only expand open-ended series owned by this agency (never another tenant's routines).
         shiftService.ensureOpenEndedCoverage(from, to, clientProfileId, facilityProfileId, actor);
 
         Specification<Shift> filters = ShiftSpecifications.withFilters(
@@ -245,10 +246,15 @@ public class ScheduleCalendarService {
                 filters,
                 PageRequest.of(0, 500, Sort.by("date", "startTime"))).getContent();
 
+        // Load claims only for shifts this agency owns (never inspect other agencies' assignments).
+        List<UUID> ownedShiftIds = shifts.stream()
+                .filter(s -> agency.getId().equals(s.getAgencyId()))
+                .map(Shift::getId)
+                .toList();
         Map<UUID, List<ShiftClaim>> claimsByShift = Map.of();
-        if (!shifts.isEmpty()) {
-            List<UUID> ids = shifts.stream().map(Shift::getId).toList();
-            claimsByShift = shiftClaimRepository.findByShiftIdInAndStatusIn(ids, ROSTER_STATUSES)
+        if (!ownedShiftIds.isEmpty()) {
+            claimsByShift = shiftClaimRepository
+                    .findByShiftIdInAndStatusIn(ownedShiftIds, ROSTER_STATUSES)
                     .stream()
                     .collect(Collectors.groupingBy(c -> c.getShift().getId()));
         }
@@ -259,42 +265,61 @@ public class ScheduleCalendarService {
         }
 
         for (Shift shift : shifts) {
-            List<ShiftClaim> claims = claimsByShift.getOrDefault(shift.getId(), List.of());
-            int required = Math.max(1, shift.getRequiredHeadcount());
-            int filled = shift.getFilledSlots();
-            int open = Math.max(0, required - filled);
-            boolean needsCoverage = shift.isMarketplacePosted()
-                    && shift.getMarketplaceSlots() > 0
-                    && !TERMINAL.contains(shift.getStatus());
-
             if (shift.getStatus() == ShiftStatus.CANCELLED) {
                 continue;
             }
 
-            List<ScheduleRosterSlotResponse> roster = claims.stream()
-                    .map(claim -> toAgencyRosterSlot(claim, agencyCaregiverIds))
-                    .toList();
+            boolean owned = agency.getId().equals(shift.getAgencyId());
+            List<ScheduleRosterSlotResponse> roster;
+            int required = Math.max(1, shift.getRequiredHeadcount());
+            int filled;
+            int open;
+            boolean needsCoverage;
+            String notes;
+
+            if (owned) {
+                List<ShiftClaim> claims = claimsByShift.getOrDefault(shift.getId(), List.of());
+                filled = shift.getFilledSlots();
+                open = Math.max(0, required - filled);
+                needsCoverage = shift.isMarketplacePosted()
+                        && shift.getMarketplaceSlots() > 0
+                        && !TERMINAL.contains(shift.getStatus());
+                notes = shift.getNotes();
+                // Unmask only caregivers assigned on THIS agency's shift (not merely on roster).
+                roster = claims.stream()
+                        .map(claim -> toOwnedAgencyRosterSlot(claim, agencyCaregiverIds))
+                        .toList();
+            } else {
+                // Another agency's coverage: time window only + opaque occupancy. No names/status/notes.
+                filled = shift.getFilledSlots() > 0 ? 1 : 0;
+                open = 0;
+                needsCoverage = false;
+                notes = null;
+                roster = filled > 0
+                        ? List.of(ScheduleRosterSlotResponse.opaqueOccupied())
+                        : List.of();
+            }
 
             ScheduleShiftCardResponse card = new ScheduleShiftCardResponse(
                     shift.getId(),
                     shift.getClientProfileId(),
                     null,
-                    shift.getRequiredQualification(),
+                    owned ? shift.getRequiredQualification() : null,
                     shift.getStartTime(),
                     shift.getEndTime(),
-                    shift.getStatus(),
-                    shift.getScheduleType(),
-                    shift.getSeriesId(),
-                    required,
+                    owned ? shift.getStatus() : ShiftStatus.CLAIMED,
+                    owned ? shift.getScheduleType() : null,
+                    owned ? shift.getSeriesId() : null,
+                    owned ? required : Math.max(1, filled),
                     filled,
                     open,
-                    shift.isMarketplacePosted(),
-                    shift.getMarketplaceSlots(),
+                    owned && shift.isMarketplacePosted(),
+                    owned ? shift.getMarketplaceSlots() : 0,
                     needsCoverage,
-                    shift.getNotes(),
+                    notes,
                     roster,
-                    shift.getAgencyId() != null && shift.getAgencyId().equals(agency.getId()),
-                    shift.isAgencyCoverageRequested());
+                    owned,
+                    owned && shift.isAgencyCoverageRequested());
 
             byDay.computeIfAbsent(shift.getDate(), ignored -> new ArrayList<>()).add(card);
         }
@@ -316,7 +341,12 @@ public class ScheduleCalendarService {
                 caregiver.getProfilePhotoUrl());
     }
 
-    private ScheduleRosterSlotResponse toAgencyRosterSlot(ShiftClaim claim, Set<UUID> agencyCaregiverIds) {
+    /**
+     * Roster slots on shifts owned by the viewing agency. Caregivers not on this agency's
+     * roster stay masked (marketplace/other), but never leak another agency's assignment.
+     */
+    private ScheduleRosterSlotResponse toOwnedAgencyRosterSlot(
+            ShiftClaim claim, Set<UUID> agencyCaregiverIds) {
         CaregiverProfile caregiver = claim.getCaregiverProfile();
         if (agencyCaregiverIds.contains(caregiver.getId())) {
             return ScheduleRosterSlotResponse.visible(
